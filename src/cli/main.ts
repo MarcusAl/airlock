@@ -1,5 +1,6 @@
 import { readFileSync } from "node:fs";
 import { AirlockError } from "../errors.js";
+import { claudeCommand } from "./commands/claude.js";
 import { execCommand } from "./commands/exec.js";
 import { importCommand } from "./commands/import.js";
 import { installCommand } from "./commands/install.js";
@@ -14,6 +15,7 @@ const COMMANDS: readonly Command[] = [
   runSandboxCommand,
   execCommand,
   shellCommand,
+  claudeCommand,
   lsCommand,
 ];
 
