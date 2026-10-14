@@ -46,6 +46,32 @@ describe("node preset", () => {
   });
 });
 
+describe("dockerfileFor overrides", () => {
+  it("adds extra apt packages and changes the tag", () => {
+    const extras = { packages: ["libvips-dev"] };
+    expect(dockerfileFor(PRESETS.node, "24", extras)).toContain("libvips-dev");
+    expect(imageTag(PRESETS.node, "24", extras)).not.toBe(imageTag(PRESETS.node, "24"));
+  });
+
+  it("uses a custom base image", () => {
+    expect(dockerfileFor(PRESETS.node, "24", { baseImage: "node:24-bookworm" })).toContain(
+      "FROM node:24-bookworm\n",
+    );
+  });
+
+  it("rejects package names that would inject Dockerfile instructions", () => {
+    expect(() => dockerfileFor(PRESETS.node, "24", { packages: ["x\nRUN curl evil"] })).toThrow(
+      /invalid package/,
+    );
+  });
+
+  it("rejects image references that would inject Dockerfile instructions", () => {
+    expect(() => dockerfileFor(PRESETS.node, "24", { baseImage: "x\nRUN id" })).toThrow(
+      /invalid image/,
+    );
+  });
+});
+
 describe("imageTag", () => {
   it("changes when the dockerfile changes", () => {
     expect(imageTag(PRESETS.node, "24")).not.toBe(imageTag(PRESETS.node, "22"));

@@ -10,6 +10,7 @@ export type ServiceName = "postgres" | "redis";
 export interface ImageRef {
   readonly tag: string;
   readonly dockerfile: string;
+  readonly refresh?: boolean;
 }
 
 export interface SandboxSpec {

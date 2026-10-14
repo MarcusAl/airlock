@@ -1,9 +1,21 @@
 import { readFileSync } from "node:fs";
 import { AirlockError } from "../errors.js";
+import { execCommand } from "./commands/exec.js";
 import { importCommand } from "./commands/import.js";
+import { installCommand } from "./commands/install.js";
+import { lsCommand } from "./commands/ls.js";
+import { runCommand as runSandboxCommand } from "./commands/run.js";
+import { shellCommand } from "./commands/shell.js";
 import { type Command, createContext } from "./context.js";
 
-const COMMANDS: readonly Command[] = [importCommand];
+const COMMANDS: readonly Command[] = [
+  importCommand,
+  installCommand,
+  runSandboxCommand,
+  execCommand,
+  shellCommand,
+  lsCommand,
+];
 
 const version = (): string =>
   JSON.parse(readFileSync(new URL("../../package.json", import.meta.url), "utf8")).version;

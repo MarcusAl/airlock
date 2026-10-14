@@ -15,6 +15,8 @@ export interface SandboxState {
   ports: number[];
   services: ServiceName[];
   quarantined: string[];
+  baseImage?: string;
+  packages?: string[];
   exportedHead?: string;
   createdAt: string;
 }
