@@ -53,7 +53,7 @@ export class Importer {
   async import(source: string, name: string): Promise<ImportResult> {
     const paths = SandboxPaths.for(name);
     if (existsSync(paths.dir)) throw new AirlockError(`sandbox "${name}" already exists`);
-    await this.backend.remove(name);
+    await this.clearLeftovers(name, paths);
     mkdirSync(paths.workspace, { recursive: true });
     try {
       return await this.prepare(source, name, paths);
@@ -74,6 +74,16 @@ export class Importer {
     const state = this.initialState(source, name, head, moved, detected);
     new StateStore(paths).save(state);
     return { state, findings, moved, warnings };
+  }
+
+  private async clearLeftovers(name: string, paths: SandboxPaths): Promise<void> {
+    const owner = await this.backend.owner(name);
+    if (owner && owner !== paths.dir && existsSync(owner)) {
+      throw new AirlockError(
+        `a sandbox named "${name}" already exists in ${owner}; pick another --name`,
+      );
+    }
+    await this.backend.remove(name);
   }
 
   private async fetch(source: string, paths: SandboxPaths): Promise<void> {

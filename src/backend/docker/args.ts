@@ -8,8 +8,20 @@ import { label, names } from "./names.js";
 export const PROXY_URL = "http://gateway:3128";
 export const GATEWAY_PORT_BASE = 20000;
 const USER = `${IMAGE_UID}:${IMAGE_UID}`;
-const HARDENING = ["--cap-drop", "ALL", "--security-opt", "no-new-privileges"];
-const LIMITS = ["--pids-limit", "1024", "--memory", "4g", "--cpus", "2"];
+type Flags = ReadonlyArray<readonly string[]>;
+
+const argv = (...groups: Flags): string[] => groups.flat();
+
+const HARDENING: Flags = [
+  ["--cap-drop", "ALL"],
+  ["--security-opt", "no-new-privileges"],
+];
+
+const LIMITS: Flags = [
+  ["--pids-limit", "1024"],
+  ["--memory", "4g"],
+  ["--cpus", "2"],
+];
 const NO_PROXY = "localhost,127.0.0.1,app,postgres,redis";
 
 const PROXY_ENV: Record<string, string> = {
@@ -28,10 +40,8 @@ const GIT_ENV: Record<string, string> = {
   GIT_CONFIG_VALUE_0: "*",
 };
 
-const envArgs = (env: Readonly<Record<string, string>>): string[] =>
-  Object.entries(env).flatMap(([key, value]) => ["-e", `${key}=${value}`]);
-
-const mount = (spec: string): string[] => ["--mount", spec];
+const envFlags = (env: Readonly<Record<string, string>>): Flags =>
+  Object.entries(env).map(([key, value]) => ["-e", `${key}=${value}`]);
 
 export const assertMountable = (path: string): string => {
   if (path.includes(",")) {
@@ -40,72 +50,63 @@ export const assertMountable = (path: string): string => {
   return path;
 };
 
-const workspaceMounts = (spec: SandboxSpec): string[] => {
+const workspaceMounts = (spec: SandboxSpec): Flags => {
   const workspace = assertMountable(spec.workspace);
   const n = names(spec.name);
   return [
-    ...mount(`type=bind,src=${workspace},dst=/work`),
-    ...mount(`type=bind,src=${workspace}/.git,dst=/work/.git,readonly`),
-    ...mount(`type=volume,src=${n.cache},dst=/cache`),
-    ...spec.workspaceVolumes.flatMap((rel) =>
-      mount(`type=volume,src=${n.volume(rel)},dst=/work/${rel}`),
-    ),
+    ["--mount", `type=bind,src=${workspace},dst=/work`],
+    ["--mount", `type=bind,src=${workspace}/.git,dst=/work/.git,readonly`],
+    ["--mount", `type=volume,src=${n.cache},dst=/cache`],
+    ...spec.workspaceVolumes.map((rel) => [
+      "--mount",
+      `type=volume,src=${n.volume(rel)},dst=/work/${rel}`,
+    ]),
   ];
 };
 
 export const appRunArgs = (spec: SandboxSpec, hash: string): string[] => {
   const n = names(spec.name);
-  return [
-    "run",
-    "-d",
-    "--name",
-    n.app,
-    "--hostname",
-    spec.name,
-    "--init",
-    ...label(spec.name, "app", hash),
-    "--network",
-    n.network,
-    "--network-alias",
-    "app",
-    "--user",
-    USER,
+  return argv(
+    ["run", "-d", "--init"],
+    ["--name", n.app],
+    ["--hostname", spec.name],
+    label(spec.name, spec.workspace, "app", hash),
+    ["--network", n.network],
+    ["--network-alias", "app"],
+    ["--user", USER],
     ...HARDENING,
-    "--read-only",
+    ["--read-only"],
     ...LIMITS,
-    "--tmpfs",
-    "/tmp:rw,nosuid,nodev,size=1g",
-    "--tmpfs",
-    `/home/airlock:rw,nosuid,nodev,size=512m,uid=${IMAGE_UID},gid=${IMAGE_UID}`,
+    ["--tmpfs", "/tmp:rw,nosuid,nodev,size=1g"],
+    ["--tmpfs", `/home/airlock:rw,nosuid,nodev,size=512m,uid=${IMAGE_UID},gid=${IMAGE_UID}`],
     ...workspaceMounts(spec),
-    ...envArgs({ ...PROXY_ENV, ...GIT_ENV, HOME: "/home/airlock", ...spec.env }),
-    "--workdir",
-    "/work",
-    spec.image.tag,
-    "sleep",
-    "infinity",
-  ];
+    ...envFlags({ ...PROXY_ENV, ...GIT_ENV, HOME: "/home/airlock", ...spec.env }),
+    ["--workdir", "/work"],
+    [spec.image.tag, "sleep", "infinity"],
+  );
 };
 
-export const serviceRunArgs = (sandbox: string, service: ServiceName, hash: string): string[] => {
+export const serviceRunArgs = (
+  sandbox: string,
+  workspace: string,
+  service: ServiceName,
+  hash: string,
+): string[] => {
   const n = names(sandbox);
-  return [
-    "run",
-    "-d",
-    "--name",
-    n.service(service),
-    ...label(sandbox, "service", hash),
-    "--network",
-    n.network,
-    "--network-alias",
-    service,
-    ...envArgs(SERVICES[service].env),
-    SERVICES[service].image,
-  ];
+  return argv(
+    ["run", "-d"],
+    ["--name", n.service(service)],
+    label(sandbox, workspace, "service", hash),
+    ["--network", n.network],
+    ["--network-alias", service],
+    ...envFlags(SERVICES[service].env),
+    [SERVICES[service].image],
+  );
 };
 
 export interface GatewayArgs {
   sandbox: string;
+  workspace: string;
   image: string;
   squidConf: string;
   ports: readonly number[];
@@ -114,26 +115,24 @@ export interface GatewayArgs {
 
 export const gatewayCreateArgs = ({
   sandbox,
+  workspace,
   image,
   squidConf,
   ports,
   hash,
-}: GatewayArgs): string[] => [
-  "create",
-  "--name",
-  names(sandbox).gateway,
-  ...label(sandbox, "gateway", hash),
-  ...HARDENING,
-  "--read-only",
-  "--tmpfs",
-  "/tmp",
-  ...ports.flatMap((port, i) => ["-p", `127.0.0.1:${port}:${GATEWAY_PORT_BASE + i}`]),
-  "-e",
-  `SQUID_CONF_B64=${Buffer.from(squidConf).toString("base64")}`,
-  "-e",
-  `FORWARDS=${ports.map((port, i) => `${GATEWAY_PORT_BASE + i}:app:${port}`).join(" ")}`,
-  image,
-];
+}: GatewayArgs): string[] =>
+  argv(
+    ["create"],
+    ["--name", names(sandbox).gateway],
+    label(sandbox, workspace, "gateway", hash),
+    ...HARDENING,
+    ["--read-only"],
+    ["--tmpfs", "/tmp"],
+    ...ports.map((port, i) => ["-p", `127.0.0.1:${port}:${GATEWAY_PORT_BASE + i}`]),
+    ["-e", `SQUID_CONF_B64=${Buffer.from(squidConf).toString("base64")}`],
+    ["-e", `FORWARDS=${ports.map((port, i) => `${GATEWAY_PORT_BASE + i}:app:${port}`).join(" ")}`],
+    [image],
+  );
 
 const containerCwd = (cwd: string): string => {
   const normalised = posix.normalize(cwd || ".");
@@ -143,52 +142,42 @@ const containerCwd = (cwd: string): string => {
   return posix.join("/work", normalised);
 };
 
-export const execArgs = (request: ExecRequest): string[] => [
-  "exec",
-  "-i",
-  ...(request.tty ? ["-t"] : []),
-  "--user",
-  USER,
-  "--workdir",
-  containerCwd(request.cwd),
-  ...request.envKeys.flatMap((key) => ["-e", key]),
-  names(request.name).app,
-  "bash",
-  "-c",
-  request.command,
-];
+export const execArgs = (request: ExecRequest): string[] =>
+  argv(
+    ["exec", "-i"],
+    request.tty ? ["-t"] : [],
+    ["--user", USER],
+    ["--workdir", containerCwd(request.cwd)],
+    ...request.envKeys.map((key) => ["-e", key]),
+    [names(request.name).app, "bash", "-c", request.command],
+  );
 
 export const CLONE_IMAGE = "alpine/git:2.54.0";
 
-export const cloneArgs = (url: string, destination: string, localPath?: string): string[] => [
-  "run",
-  "--rm",
-  "--network",
-  "bridge",
-  ...HARDENING,
-  "--read-only",
-  "--tmpfs",
-  "/tmp",
-  "--pids-limit",
-  "256",
-  "--memory",
-  "1g",
-  "--user",
-  USER,
-  "-e",
-  "HOME=/tmp",
-  "--mount",
-  `type=bind,src=${assertMountable(destination)},dst=/out`,
-  ...(localPath
-    ? ["--mount", `type=bind,src=${assertMountable(localPath)},dst=/src,readonly`]
-    : []),
-  CLONE_IMAGE,
-  "-c",
-  "safe.directory=*",
-  "clone",
-  "--no-recurse-submodules",
-  "--template=",
-  "--",
-  url,
-  "/out",
-];
+export const cloneArgs = (url: string, destination: string, localPath?: string): string[] =>
+  argv(
+    ["run", "--rm"],
+    ["--network", "bridge"],
+    ...HARDENING,
+    ["--read-only"],
+    ["--tmpfs", "/tmp"],
+    ["--pids-limit", "256"],
+    ["--memory", "1g"],
+    ["--user", USER],
+    ["-e", "HOME=/tmp"],
+    ["--mount", `type=bind,src=${assertMountable(destination)},dst=/out`],
+    localPath ? ["--mount", `type=bind,src=${assertMountable(localPath)},dst=/src,readonly`] : [],
+    [CLONE_IMAGE, "-c", "safe.directory=*", "clone", "--no-recurse-submodules", "--template="],
+    ["--", url, "/out"],
+  );
+
+export const chownVolumeArgs = (volume: string, image: string): string[] =>
+  argv(
+    ["run", "--rm"],
+    ["--network", "none"],
+    ["--user", "0"],
+    ["--cap-drop", "ALL"],
+    ["--cap-add", "CHOWN"],
+    ["--mount", `type=volume,src=${volume},dst=/v`],
+    [image, "chown", `${IMAGE_UID}:${IMAGE_UID}`, "/v"],
+  );

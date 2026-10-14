@@ -129,6 +129,7 @@ describe("Importer", () => {
       up: async () => {},
       resume: async () => false,
       exec: async () => 0,
+      owner: async () => undefined,
       stop: async () => {},
       remove: async () => {},
       list: async () => [],
@@ -142,6 +143,34 @@ describe("Importer", () => {
     const importer = new Importer({ runner: new ShellRunner(), backend, cloner });
     await expect(importer.import("https://example.com/x.git", "x")).rejects.toThrow(/clone failed/);
     expect(existsSync(join(home, "x"))).toBe(false);
+    vi.unstubAllEnvs();
+  });
+});
+
+describe("Importer with two sandbox homes", () => {
+  it("refuses to clear a same-named sandbox that still lives in another home", async () => {
+    const otherHome = mkdtempSync(join(tmpdir(), "airlock-other-"));
+    mkdirSync(join(otherHome, "x"), { recursive: true });
+    vi.stubEnv("AIRLOCK_HOME", mkdtempSync(join(tmpdir(), "airlock-home-")));
+    const removed: string[] = [];
+    const backend = {
+      up: async () => {},
+      resume: async () => false,
+      exec: async () => 0,
+      owner: async () => join(otherHome, "x"),
+      stop: async () => {},
+      remove: async (name: string) => {
+        removed.push(name);
+      },
+      list: async () => [],
+      freeze: async <T>(_name: string, work: () => Promise<T>) => work(),
+    };
+    const cloner = { clone: async () => {} };
+    const importer = new Importer({ runner: new ShellRunner(), backend, cloner });
+    await expect(importer.import("https://example.com/x.git", "x")).rejects.toThrow(
+      /already exists in/,
+    );
+    expect(removed).toEqual([]);
     vi.unstubAllEnvs();
   });
 });

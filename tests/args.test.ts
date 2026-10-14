@@ -59,6 +59,7 @@ describe("gatewayCreateArgs", () => {
   it("publishes ports on loopback only, to unprivileged gateway ports", () => {
     const args = gatewayCreateArgs({
       sandbox: "demo",
+      workspace: "/Users/me/sandboxes/demo/workspace",
       image: "gw",
       squidConf: "x",
       ports: [4173],

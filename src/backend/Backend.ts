@@ -54,6 +54,7 @@ export interface Backend extends Freezer {
   up(spec: SandboxSpec): Promise<void>;
   resume(spec: SandboxSpec): Promise<boolean>;
   exec(request: ExecRequest): Promise<number>;
+  owner(name: string): Promise<string | undefined>;
   stop(name: string): Promise<void>;
   remove(name: string): Promise<void>;
   list(): Promise<SandboxStatus[]>;

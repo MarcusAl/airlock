@@ -1,128 +1,107 @@
-import { createHash } from "node:crypto";
-import { readFileSync } from "node:fs";
-import { setTimeout as sleep } from "node:timers/promises";
-import { AirlockError } from "../../errors.js";
-import { compileSquidConfig, GATEWAY_ASSETS } from "../../net/squid.js";
-import { IMAGE_UID } from "../../presets/dockerfile.js";
 import type { ProcessRunner } from "../../process/ProcessRunner.js";
 import type { Backend, ExecRequest, SandboxSpec, SandboxStatus } from "../Backend.js";
-import { appRunArgs, execArgs, gatewayCreateArgs, serviceRunArgs } from "./args.js";
-import { explainDockerError } from "./explain.js";
+import { appRunArgs, execArgs, serviceRunArgs } from "./args.js";
+import { DockerClient } from "./DockerClient.js";
+import { Gateway, gatewayHash, hashOf } from "./Gateway.js";
 import { ImageBuilder } from "./ImageBuilder.js";
 import { names } from "./names.js";
+import { PauseControl } from "./PauseControl.js";
 import { PortGuard } from "./ports.js";
-
-const hashOf = (value: unknown): string =>
-  createHash("sha256").update(JSON.stringify(value)).digest("hex").slice(0, 12);
-
-const gatewayImageTag = (): string => {
-  const files = ["Dockerfile", "entrypoint.sh"].map((file) =>
-    readFileSync(new URL(file, GATEWAY_ASSETS), "utf8"),
-  );
-  return `airlock-gateway:${hashOf(files)}`;
-};
+import { Reconciler } from "./Reconciler.js";
 
 const appHash = ({ policy: _policy, ports: _ports, ...rest }: SandboxSpec): string => hashOf(rest);
 
-const lines = (out: string): string[] => out.split("\n").filter(Boolean);
-
-const gatewayHash = (spec: SandboxSpec): string =>
-  hashOf([gatewayImageTag(), compileSquidConfig(spec.policy), spec.ports]);
-
 export class DockerBackend implements Backend {
+  private readonly docker: DockerClient;
+  private readonly reconciler: Reconciler;
+  private readonly gateway: Gateway;
+  private readonly pauses: PauseControl;
+
   constructor(
-    private readonly runner: ProcessRunner,
+    runner: ProcessRunner,
     private readonly images: ImageBuilder = new ImageBuilder(runner),
-    private readonly ports: PortGuard = new PortGuard(),
-  ) {}
+    ports: PortGuard = new PortGuard(),
+  ) {
+    this.docker = new DockerClient(runner);
+    this.reconciler = new Reconciler(this.docker);
+    this.gateway = new Gateway({ docker: this.docker, images, ports, reconciler: this.reconciler });
+    this.pauses = new PauseControl(this.docker);
+  }
 
   async up(spec: SandboxSpec): Promise<void> {
+    const n = names(spec.name);
     await this.images.ensure(
       spec.image.tag,
       { dockerfile: spec.image.dockerfile },
       spec.image.refresh,
     );
-    await this.ensureNetwork(spec.name);
+    await this.reconciler.network(spec);
     for (const service of spec.services) {
-      await this.ensureContainer(names(spec.name).service(service), hashOf(service), (hash) =>
-        this.docker(serviceRunArgs(spec.name, service, hash)),
+      await this.reconciler.container(n.service(service), hashOf(service), (hash) =>
+        this.docker.run(serviceRunArgs(spec.name, spec.workspace, service, hash)),
       );
     }
-    await this.ensureVolumes(spec);
-    await this.ensureContainer(names(spec.name).app, appHash(spec), (hash) =>
-      this.docker(appRunArgs(spec, hash)),
+    await this.reconciler.volumes(spec);
+    await this.reconciler.container(n.app, appHash(spec), (hash) =>
+      this.docker.run(appRunArgs(spec, hash)),
     );
-    await this.ensureGateway(spec);
+    await this.gateway.ensure(spec);
   }
 
   async resume(spec: SandboxSpec): Promise<boolean> {
     const n = names(spec.name);
-    await this.unpauseIfPaused([n.app]);
-    const inspect = await this.runner.capture("docker", [
-      "inspect",
-      "-f",
+    await this.pauses.unpauseIfPaused(n.app);
+    const labels = await this.docker.inspect(
       '{{index .Config.Labels "airlock.config"}}',
       n.app,
       n.gateway,
-    ]);
-    const [app, gateway] = lines(inspect.stdout).map((line) => line.trim());
-    if (inspect.code !== 0 || app !== appHash(spec) || gateway !== gatewayHash(spec)) return false;
-    return (await this.runner.capture("docker", ["start", n.app, n.gateway])).code === 0;
-  }
-
-  async freeze<T>(name: string, work: () => Promise<T>): Promise<T> {
-    const app = names(name).app;
-    const paused = (await this.runner.capture("docker", ["pause", app])).code === 0;
-    try {
-      return await work();
-    } finally {
-      if (paused) await this.unpause(app);
-    }
-  }
-
-  async stop(name: string): Promise<void> {
-    const containers = lines(
-      await this.docker(["ps", "-q", "--filter", `label=airlock.name=${name}`]),
     );
-    if (containers.length) await this.docker(["stop", ...containers]);
+    const [app, gateway] = labels ?? [];
+    if (app !== appHash(spec) || gateway !== gatewayHash(spec)) return false;
+    return (await this.docker.attempt(["start", n.app, n.gateway])).code === 0;
   }
 
-  private async unpause(container: string): Promise<void> {
-    const result = await this.runner.capture("docker", ["unpause", container]);
-    if (result.code !== 0) {
-      throw new AirlockError(
-        `could not unpause the sandbox; run: docker unpause ${container} (${result.stderr.trim()})`,
-      );
-    }
-  }
-
-  private async unpauseIfPaused(containers: readonly string[]): Promise<void> {
-    for (const container of containers) {
-      const state = await this.runner.capture("docker", [
-        "inspect",
-        "-f",
-        "{{.State.Paused}}",
-        container,
-      ]);
-      if (state.stdout.trim() === "true") await this.unpause(container);
-    }
+  freeze<T>(name: string, work: () => Promise<T>): Promise<T> {
+    return this.pauses.freeze(names(name).app, work);
   }
 
   exec(request: ExecRequest): Promise<number> {
-    return this.runner.interactive("docker", execArgs(request));
+    return this.docker.interactive(execArgs(request));
+  }
+
+  async owner(name: string): Promise<string | undefined> {
+    const homes = await this.docker.lines([
+      "ps",
+      "-a",
+      "--filter",
+      `label=airlock.name=${name}`,
+      "--format",
+      '{{.Label "airlock.home"}}',
+    ]);
+    return homes.find(Boolean);
+  }
+
+  async stop(name: string): Promise<void> {
+    const containers = await this.docker.lines([
+      "ps",
+      "-q",
+      "--filter",
+      `label=airlock.name=${name}`,
+    ]);
+    if (containers.length) await this.docker.run(["stop", ...containers]);
   }
 
   async remove(name: string): Promise<void> {
     const filter = ["--filter", `label=airlock.name=${name}`];
-    const containers = lines(await this.docker(["ps", "-aq", ...filter]));
-    if (containers.length) await this.docker(["rm", "-f", ...containers]);
-    const volumes = lines(await this.docker(["volume", "ls", "-q", ...filter]));
-    if (volumes.length) await this.docker(["volume", "rm", ...volumes]);
-    await this.runner.capture("docker", ["network", "rm", names(name).network]);
+    const containers = await this.docker.lines(["ps", "-aq", ...filter]);
+    if (containers.length) await this.docker.run(["rm", "-f", ...containers]);
+    const volumes = await this.docker.lines(["volume", "ls", "-q", ...filter]);
+    if (volumes.length) await this.docker.run(["volume", "rm", ...volumes]);
+    await this.docker.attempt(["network", "rm", names(name).network]);
   }
 
   async list(): Promise<SandboxStatus[]> {
-    const out = await this.docker([
+    const rows = await this.docker.lines([
       "ps",
       "-a",
       "--filter",
@@ -130,114 +109,9 @@ export class DockerBackend implements Backend {
       "--format",
       '{{.Label "airlock.name"}}\t{{.State}}',
     ]);
-    return lines(out).map((line) => {
-      const [name = "", state = ""] = line.split("\t");
+    return rows.map((row) => {
+      const [name = "", state = ""] = row.split("\t");
       return { name, running: state === "running" };
     });
-  }
-
-  private async docker(args: readonly string[]): Promise<string> {
-    const result = await this.runner.capture("docker", args);
-    if (result.code !== 0) {
-      const explanation = explainDockerError(result.stderr);
-      throw new AirlockError(explanation ?? `docker ${args[0]} failed: ${result.stderr.trim()}`);
-    }
-    return result.stdout;
-  }
-
-  private async exists(kind: "network" | "volume", name: string): Promise<boolean> {
-    return (await this.runner.capture("docker", [kind, "inspect", name])).code === 0;
-  }
-
-  private async ensureNetwork(sandbox: string): Promise<void> {
-    const network = names(sandbox).network;
-    if (await this.exists("network", network)) return;
-    await this.docker([
-      "network",
-      "create",
-      "--internal",
-      "--label",
-      `airlock.name=${sandbox}`,
-      network,
-    ]);
-  }
-
-  private async ensureVolumes(spec: SandboxSpec): Promise<void> {
-    const n = names(spec.name);
-    for (const volume of [n.cache, ...spec.workspaceVolumes.map(n.volume)]) {
-      if (await this.exists("volume", volume)) continue;
-      await this.docker(["volume", "create", "--label", `airlock.name=${spec.name}`, volume]);
-      await this.docker([
-        "run",
-        "--rm",
-        "--network",
-        "none",
-        "--user",
-        "0",
-        "--cap-drop",
-        "ALL",
-        "--cap-add",
-        "CHOWN",
-        "--mount",
-        `type=volume,src=${volume},dst=/v`,
-        spec.image.tag,
-        "chown",
-        `${IMAGE_UID}:${IMAGE_UID}`,
-        "/v",
-      ]);
-    }
-  }
-
-  private async ensureContainer(
-    name: string,
-    hash: string,
-    create: (hash: string) => Promise<unknown>,
-  ): Promise<void> {
-    const inspect = await this.runner.capture("docker", [
-      "inspect",
-      "-f",
-      '{{index .Config.Labels "airlock.config"}} {{.State.Running}}',
-      name,
-    ]);
-    const [currentHash, running] = inspect.stdout.trim().split(" ");
-    if (inspect.code === 0 && currentHash === hash) {
-      if (running !== "true") await this.docker(["start", name]);
-      return;
-    }
-    if (inspect.code === 0) await this.docker(["rm", "-f", name]);
-    await create(hash);
-  }
-
-  private async ensureGateway(spec: SandboxSpec): Promise<void> {
-    const image = gatewayImageTag();
-    await this.images.ensure(image, { context: GATEWAY_ASSETS });
-    const squidConf = compileSquidConfig(spec.policy);
-    const n = names(spec.name);
-    await this.ensureContainer(n.gateway, gatewayHash(spec), async (hash) => {
-      await this.ports.assertFree(spec.ports);
-      await this.docker(
-        gatewayCreateArgs({ sandbox: spec.name, image, squidConf, ports: spec.ports, hash }),
-      );
-      await this.docker(["network", "connect", "--alias", "gateway", n.network, n.gateway]);
-      await this.docker(["start", n.gateway]);
-      await this.assertStaysUp(n.gateway);
-    });
-  }
-
-  private async assertStaysUp(container: string): Promise<void> {
-    for (let check = 0; check < 5; check++) {
-      const state = await this.runner.capture("docker", [
-        "inspect",
-        "-f",
-        "{{.State.Running}}",
-        container,
-      ]);
-      if (state.stdout.trim() !== "true") {
-        const logs = await this.runner.capture("docker", ["logs", "--tail", "5", container]);
-        const tail = `${logs.stdout}${logs.stderr}`.trim();
-        throw new AirlockError(`the network gateway stopped right after starting:\n${tail}`);
-      }
-      await sleep(200);
-    }
   }
 }
