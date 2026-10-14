@@ -39,6 +39,13 @@ An airlock is a chamber between two environments: one door opens at a time, and 
 4. **Agents.** `airlock claude <name>` starts your normal Claude Code, however you already sign in. A `PreToolUse` hook rewrites every Bash command into `airlock exec`, so commands run in the container. A few plain git writes (`git add`, `git commit -m`, `git restore`) are the exception: they run on your machine with hooks, fsmonitor, pager and editor forced off. The hook sees every tool call: file tools are blocked outside the workspace and from writing into `.git`, web and MCP tools ask first, and tools it doesn't know are denied. MCP servers are off unless you pass `--allow-mcp`. If the hook fails, the call is blocked, not run.
 5. **Leave.** `airlock export` writes a zip, patch or git bundle for submission. `airlock promote` copies the repo out as a normal git repository once you trust it: that is the inner door.
 
+### Two windows, both deliberate
+
+From the code's point of view the container is the whole machine: it doesn't know your computer exists. airlock, your agent and your editor stay outside on purpose, as the operators of the airlock. The box has exactly two openings:
+
+1. **The shared workspace folder.** Files only. The danger is not the box reaching out but writing a file that something on your machine later executes: an editor task, a git hook or filter, a symlink to `~/.ssh`. The quarantine, the read-only `.git`, the tripwire and the hook's path checks all guard this one opening.
+2. **The gateway.** Outbound only as the policy allows and never to your machine; inbound only on ports you publish.
+
 ## Quick start
 
 Prerequisites: Docker (OrbStack, Docker Desktop or Docker Engine), Node.js 22+, git. Optional: Claude Code.
