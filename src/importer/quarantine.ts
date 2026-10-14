@@ -1,6 +1,13 @@
 import { posix } from "node:path";
 
-export const QUARANTINE_DIRS = [".vscode", ".cursor", ".claude", ".devcontainer", ".idea"];
+export const QUARANTINE_DIRS = [
+  ".agents",
+  ".vscode",
+  ".cursor",
+  ".claude",
+  ".devcontainer",
+  ".idea",
+];
 export const QUARANTINE_FILES = [
   "CLAUDE.md",
   "CLAUDE.local.md",

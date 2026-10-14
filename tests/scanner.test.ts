@@ -31,8 +31,13 @@ describe("Scanner", () => {
   });
 
   it("flags editor and agent config", () => {
-    const root = repo({ ".vscode/tasks.json": "{}", "docs/CLAUDE.md": "x" });
+    const root = repo({
+      ".vscode/tasks.json": "{}",
+      "docs/CLAUDE.md": "x",
+      ".agents/skills/pr/SKILL.md": "x",
+    });
     expect(rulesFor(root)).toEqual([
+      "medium:editor-agent-config:.agents/skills/pr/SKILL.md",
       "medium:editor-agent-config:.vscode/tasks.json",
       "medium:editor-agent-config:docs/CLAUDE.md",
     ]);
