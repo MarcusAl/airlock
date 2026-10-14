@@ -224,7 +224,7 @@ airlock's difference: your agent stays on your machine with its normal sign-in w
 
 ## Releasing
 
-Only the maintainer can publish. Publishing happens when a GitHub Release is created for a tag matching the `package.json` version (for example `v0.2.0`). The release workflow waits for the maintainer's approval in the protected `npm` environment, then publishes with npm trusted publishing and provenance, so no npm token is stored in the repository.
+Only the maintainer can publish. Publishing happens when a GitHub Release is created for a tag matching the `package.json` version (for example `v0.2.0`). The release workflow waits for the maintainer's approval in the protected `npm` environment, then **stages** the version with npm trusted publishing (no npm token is stored in the repository). A staged version isn't installable until the maintainer approves it on npm with two-factor authentication, which CI credentials can't do.
 
 ## Development
 

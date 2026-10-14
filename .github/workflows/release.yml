@@ -22,5 +22,8 @@ jobs:
           registry-url: https://registry.npmjs.org
       - name: Release tag matches package.json version
         run: test "v$(node -p 'require("./package.json").version')" = "$GITHUB_REF_NAME"
+      - name: npm with staged publishing (11.15+)
+        run: npm install -g npm@^11.15.0
       - run: npm ci
-      - run: npm publish --access public --provenance
+      - name: Stage the release (goes live only after the maintainer approves it on npm with 2FA)
+        run: npm stage publish --access public
