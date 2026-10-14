@@ -116,4 +116,29 @@ describe("failure messages", () => {
       undefined,
     );
   });
+
+  it("reports a gateway that exits right after starting", async () => {
+    const dyingGateway: ProcessRunner = {
+      capture: async (_cmd, args) => {
+        if (args[0] === "logs") return { code: 0, stdout: "", stderr: "FATAL: Bungled squid.conf" };
+        if (args.includes("{{.State.Running}}")) return { code: 0, stdout: "false\n", stderr: "" };
+        const inspecting = args[0] === "inspect" || args[1] === "inspect";
+        return { code: inspecting ? 1 : 0, stdout: "", stderr: "" };
+      },
+      interactive: async () => 0,
+    };
+    const spec = {
+      name: "demo",
+      image: { tag: "t", dockerfile: "FROM x" },
+      workspace: "/tmp/ws",
+      env: {},
+      workspaceVolumes: [],
+      policy: { mode: "none" as const, allow: [] },
+      ports: [],
+      services: [],
+    };
+    await expect(new DockerBackend(dyingGateway).up(spec)).rejects.toThrow(
+      /gateway stopped.*Bungled/s,
+    );
+  });
 });

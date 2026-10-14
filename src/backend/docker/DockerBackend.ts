@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
+import { setTimeout as sleep } from "node:timers/promises";
 import { AirlockError } from "../../errors.js";
 import { compileSquidConfig, GATEWAY_ASSETS } from "../../net/squid.js";
 import { IMAGE_UID } from "../../presets/dockerfile.js";
@@ -180,6 +181,24 @@ export class DockerBackend implements Backend {
       );
       await this.docker(["network", "connect", "--alias", "gateway", n.network, n.gateway]);
       await this.docker(["start", n.gateway]);
+      await this.assertStaysUp(n.gateway);
     });
+  }
+
+  private async assertStaysUp(container: string): Promise<void> {
+    for (let check = 0; check < 5; check++) {
+      const state = await this.runner.capture("docker", [
+        "inspect",
+        "-f",
+        "{{.State.Running}}",
+        container,
+      ]);
+      if (state.stdout.trim() !== "true") {
+        const logs = await this.runner.capture("docker", ["logs", "--tail", "5", container]);
+        const tail = `${logs.stdout}${logs.stderr}`.trim();
+        throw new AirlockError(`the network gateway stopped right after starting:\n${tail}`);
+      }
+      await sleep(200);
+    }
   }
 }

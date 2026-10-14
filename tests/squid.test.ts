@@ -31,6 +31,22 @@ describe("compileSquidConfig", () => {
     );
   });
 
+  it("collapses entries a wildcard domain already covers, which squid rejects as fatal", () => {
+    const conf = compileSquidConfig({
+      mode: "allowlist",
+      allow: ["rubygems.org", ".rubygems.org", "index.rubygems.org", "example.com"],
+    });
+    expect(conf).toContain("acl allowed dstdomain -n .rubygems.org example.com\n");
+  });
+
+  it("closes squid's cache manager before any allow rule", () => {
+    const conf = lines(compileSquidConfig({ mode: "open", allow: [] }));
+    expect(conf.indexOf("http_access deny manager")).toBeGreaterThan(-1);
+    expect(conf.indexOf("http_access deny manager")).toBeLessThan(
+      conf.indexOf("http_access allow all"),
+    );
+  });
+
   it("rejects a host that would inject squid directives", () => {
     expect(() =>
       compileSquidConfig({ mode: "allowlist", allow: ["x.com\nhttp_access allow all"] }),

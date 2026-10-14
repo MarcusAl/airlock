@@ -43,13 +43,25 @@ const BASE = [
   `acl blocked_dst dst ${BLOCKED_RANGES.join(" ")}`,
   "http_access deny !Safe_ports",
   "http_access deny CONNECT !SSL_ports",
+  "http_access deny manager",
   "http_access deny blocked_dst",
 ];
+
+const coveredBy = (wildcard: string, host: string): boolean => {
+  const bare = host.startsWith(".") ? host.slice(1) : host;
+  return wildcard !== host && (bare === wildcard.slice(1) || bare.endsWith(wildcard));
+};
+
+const collapse = (hosts: readonly string[]): string[] => {
+  const unique = [...new Set(hosts)];
+  const wildcards = unique.filter((host) => host.startsWith("."));
+  return unique.filter((host) => !wildcards.some((wildcard) => coveredBy(wildcard, host)));
+};
 
 const allowRules = ({ mode, allow }: NetPolicy): string[] => {
   if (mode === "open") return ["http_access allow all"];
   if (mode === "none" || allow.length === 0) return [];
-  const hosts = [...new Set(allow.map(validHost))];
+  const hosts = collapse(allow.map(validHost));
   return [`acl allowed dstdomain -n ${hosts.join(" ")}`, "http_access allow allowed"];
 };
 
