@@ -1,19 +1,16 @@
 #!/usr/bin/env node
 import { readFileSync } from "node:fs";
 import { dirname } from "node:path";
-import { fileURLToPath } from "node:url";
 import { DockerBackend } from "../backend/docker/DockerBackend.js";
 import { SandboxPaths } from "../core/SandboxPaths.js";
 import { Tripwire } from "../core/Tripwire.js";
 import { ShellRunner } from "../process/ProcessRunner.js";
+import { airlockCommand } from "./airlockCommand.js";
 import { decide } from "./decide.js";
-
-const HOOK_BUDGET = { maxEntries: 200_000, deadlineMs: 20_000 };
 
 const [sandbox = "", workspace = ""] = process.argv.slice(2);
 const root = dirname(dirname(workspace));
-const cli = fileURLToPath(new URL("../cli/index.js", import.meta.url));
-const airlock = ["env", `AIRLOCK_HOME=${root}`, process.execPath, cli];
+const airlock = airlockCommand(workspace);
 
 const denyAll = (message: string) => ({
   hookSpecificOutput: {
@@ -25,10 +22,7 @@ const denyAll = (message: string) => ({
 
 const output = await (async () => {
   try {
-    const tripwire = new Tripwire({
-      backend: new DockerBackend(new ShellRunner()),
-      limits: HOOK_BUDGET,
-    });
+    const tripwire = new Tripwire({ backend: new DockerBackend(new ShellRunner()) });
     const planted = await tripwire.run(SandboxPaths.for(sandbox, root));
     const result = decide(readFileSync(0, "utf8"), { sandbox, workspace, airlock });
     if (planted.length === 0) return result;

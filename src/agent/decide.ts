@@ -1,6 +1,6 @@
 import { existsSync, realpathSync } from "node:fs";
 import { dirname, isAbsolute, join, relative, resolve } from "node:path";
-import { isInside } from "../scan/walk.js";
+import { isInside } from "../paths.js";
 import { route } from "./route.js";
 
 export interface HookContext {
@@ -46,6 +46,7 @@ const INERT_TOOLS = new Set([
 ]);
 
 const ASK_TOOLS = new Set(["WebFetch", "WebSearch"]);
+const ISOLATING_TOOLS = new Set(["Agent", "Task"]);
 
 const decision = (permissionDecision: "deny" | "ask", reason: string): HookOutput => ({
   hookSpecificOutput: {
@@ -72,6 +73,9 @@ const relCwd = (workspace: string, cwd: string): string => {
   return rel.startsWith("..") || isAbsolute(rel) ? "." : rel || ".";
 };
 
+const climbsOut = (pattern: string): boolean =>
+  pattern.startsWith("~") || pattern.split("/").includes("..");
+
 const pathOf = (field: string, raw: string, cwd: string): string | undefined => {
   if (field !== "pattern") return resolve(cwd, raw);
   return isAbsolute(raw) ? raw.split(/[*?[{]/)[0] : undefined;
@@ -86,6 +90,9 @@ const fileDecision = (
 ): HookOutput => {
   for (const field of tool.fields) {
     const raw = toolInput[field];
+    if (field === "pattern" && typeof raw === "string" && climbsOut(raw)) {
+      return deny("airlock: files outside the sandbox workspace are off limits");
+    }
     const path = typeof raw === "string" ? pathOf(field, raw, cwd) : undefined;
     if (path === undefined) continue;
     const target = real(path);
@@ -108,6 +115,9 @@ const toolDecision = (
 ): HookOutput => {
   const fileTool = FILE_TOOLS[tool];
   if (fileTool) return fileDecision(fileTool, toolInput, cwd, real(ctx.workspace), real);
+  if (ISOLATING_TOOLS.has(tool) && toolInput.isolation !== undefined) {
+    return deny("airlock: isolated subagents run outside the sandbox; use a plain subagent");
+  }
   if (INERT_TOOLS.has(tool)) return {};
   if (ASK_TOOLS.has(tool) || tool.startsWith("mcp__")) {
     return decision("ask", "airlock: this tool reaches outside the sandbox");

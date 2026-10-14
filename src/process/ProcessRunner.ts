@@ -46,17 +46,24 @@ export class ShellRunner implements ProcessRunner {
   }
 
   interactive(cmd: string, args: readonly string[], options: RunOptions = {}): Promise<number> {
+    const child = spawn(cmd, args, {
+      cwd: options.cwd,
+      env: options.env ?? process.env,
+      stdio: "inherit",
+    });
+    const forward = (signal: NodeJS.Signals) => child.kill(signal);
     const ignore = () => {};
     process.on("SIGINT", ignore);
+    process.on("SIGTERM", forward);
+    process.on("SIGHUP", forward);
     return new Promise<number>((resolve, reject) => {
-      const child = spawn(cmd, args, {
-        cwd: options.cwd,
-        env: options.env ?? process.env,
-        stdio: "inherit",
-      });
       child.on("error", (error) => reject(missingProgram(cmd)(error)));
       child.on("close", (code) => resolve(code ?? 1));
-    }).finally(() => process.off("SIGINT", ignore));
+    }).finally(() => {
+      process.off("SIGINT", ignore);
+      process.off("SIGTERM", forward);
+      process.off("SIGHUP", forward);
+    });
   }
 }
 

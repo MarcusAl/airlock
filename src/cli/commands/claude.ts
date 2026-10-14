@@ -1,7 +1,7 @@
 import { parseArgs } from "node:util";
 import { ClaudeLauncher } from "../../agent/ClaudeLauncher.js";
 import { Sandbox } from "../../core/Sandbox.js";
-import { Tripwire, tripwireMessage } from "../../core/Tripwire.js";
+import { reportPlanted, Tripwire } from "../../core/Tripwire.js";
 import { formatReport, Scanner } from "../../scan/Scanner.js";
 import type { Command, Context } from "../context.js";
 import { requireName, splitDash } from "./options.js";
@@ -9,8 +9,7 @@ import { requireName, splitDash } from "./options.js";
 const USAGE = "airlock claude <name> [--allow-mcp] [-- claude args...]";
 
 const sweep = async (sandbox: Sandbox, ctx: Context): Promise<void> => {
-  const planted = await new Tripwire({ backend: ctx.backend }).run(sandbox.paths);
-  for (const path of planted) ctx.out.warn(tripwireMessage(path));
+  reportPlanted(ctx.out, await new Tripwire({ backend: ctx.backend }).run(sandbox.paths));
 };
 
 const remindHighFindings = (sandbox: Sandbox, ctx: Context): void => {

@@ -35,7 +35,7 @@ An airlock is a chamber between two environments: one door opens at a time, and 
 
 1. **Import.** The repo is cloned inside a throwaway container, then scanned for risky contents: install scripts, editor and agent config, configs that execute code, encoded blobs, native binaries, escaping symlinks, nested git repositories. Editor and agent configuration (`.vscode`, `.cursor`, `.claude`, `CLAUDE.md`, `.mcp.json`, `.envrc`, `.agents` and more) is moved into `quarantined/`, so nothing in the folder can run on your machine when you open it.
 2. **Run.** Every command runs in the app container. Its only way out is the gateway, which applies the network policy: `none` (default), `allowlist` (package registries plus hosts you name) or `open` (public internet). In every mode it refuses private, loopback and link-local addresses, including your machine's.
-3. **Tripwire.** After every command (including one you stop with Ctrl-C), and before every agent tool call, airlock pauses the container and re-checks the workspace. Anything the code planted that your tools would execute on your machine (editor tasks, agent config, nested `.git` anywhere including `node_modules`, symlinks pointing outside) is removed or quarantined.
+3. **Tripwire.** After every command (including one you stop with Ctrl-C or that gets terminated), and before every agent tool call, airlock re-checks the workspace, pausing the container while it removes anything. Anything the code planted that your tools would execute on your machine (editor tasks, agent config, nested `.git` anywhere including `node_modules`, symlinks pointing outside) is removed or quarantined.
 4. **Agents.** `airlock claude <name>` starts your normal Claude Code, however you already sign in. A `PreToolUse` hook rewrites every Bash command into `airlock exec`, so commands run in the container. A few plain git writes (`git add`, `git commit -m`, `git restore`) are the exception: they run on your machine with hooks, fsmonitor, pager and editor forced off. The hook sees every tool call: file tools are blocked outside the workspace and from writing into `.git`, web and MCP tools ask first, and tools it doesn't know are denied. MCP servers are off unless you pass `--allow-mcp`. If the hook fails, the call is blocked, not run.
 5. **Leave.** `airlock export` writes a zip, patch or git bundle for submission. `airlock promote` copies the repo out as a normal git repository once you trust it: that is the inner door.
 
@@ -57,7 +57,7 @@ From the code's point of view the container is the whole machine: it doesn't kno
 | git | included with Xcode tools | your package manager | `git --version` |
 | Claude Code (optional) | [install guide](https://docs.claude.com/en/docs/claude-code) | same | `claude --version` |
 
-Windows (WSL2 with Docker Desktop) should work but is untested.
+Windows (WSL2 with Docker Desktop) should work but is untested. On Linux, containers run as uid 1000, so v1 assumes your user is uid 1000 (`id -u`); other uids are untested and likely to hit permission errors.
 
 ### 2. Install airlock
 
@@ -67,6 +67,8 @@ npm ci && npm run build && npm link
 airlock --version          # prints the version
 airlock                    # lists every command
 ```
+
+You don't need TypeScript installed: `npm ci` brings the compiler as a project dependency and `npm run build` turns it into plain JavaScript in `dist/`. At runtime airlock needs only Node. If `npm link` fails with a permissions error (common with a distro-packaged Node on Linux), install Node with nvm, or run `npm config set prefix ~/.local` and put `~/.local/bin` on your PATH.
 
 ### 3. Make your editor safe for untrusted folders
 
@@ -101,6 +103,10 @@ airlock export takehome                    # zip of your commits, ready to submi
 
 Private repository? Clone it yourself, then `airlock import ./path`.
 
+Inside `airlock claude`, commands Claude routes into the box run without asking you each time (they can only touch the box). Git commands that run on your machine, web fetches and MCP tools still ask.
+
+When you're done for the day, `airlock stop <name>` stops the sandbox's containers, including any dev server still running in them.
+
 ### Where things live
 
 ```
@@ -126,6 +132,7 @@ Set `AIRLOCK_HOME` to keep sandboxes somewhere else. Docker resources are named 
 | `export <n> [--zip\|--patch\|--bundle] [-o file]` | Committed work as a submission artifact |
 | `promote <n> --to <dir>` | Copy out as a normal repo once you trust it |
 | `ls` | List sandboxes |
+| `stop <n>` | Stop the sandbox's containers and anything running in them |
 | `rm <n> [--force]` | Delete; refuses if work was never exported or promoted |
 
 `run` options: `--net none|allowlist|open`, `--allow <host>`, `--port <p>` (published on 127.0.0.1 only), `--with postgres|redis`, `--env <KEY>` (forward one variable from your shell; nothing is passed implicitly), `--preset node|ruby|python|go`, `--version <v>`, `--image <ref>` and `--apt <package>` (Debian or Ubuntu bases only), `--rebuild` (pull the base image again for updates). `run`, `install`, `exec`, `shell` and `rm` accept `--dry-run` to print the Docker commands instead.
@@ -170,6 +177,9 @@ Why airlock doesn't attach your editor inside the container: it was built and te
 | A download fails inside the box | The network is `none` by default. Use `--net allowlist --allow <host>`, or `--net open`. `docker logs airlock-<name>-gw` shows each request the gateway refused (`TCP_DENIED`) |
 | `the network gateway stopped right after starting` | The message includes the gateway's log. Usually an invalid `--allow` value |
 | Claude says a call was blocked by airlock | Expected for files outside the workspace, unknown tools and git writes other than plain `add`, `commit -m` and `restore`. The message says why |
+| `container is paused` | A cleanup was interrupted. The next airlock command unpauses it, or run `docker unpause airlock-<name>` |
+| Claude says every call is blocked: `too many files in the workspace` | The workspace is too large to check safely (over 200,000 entries). Remove generated files from it or use `airlock exec` directly |
+| `tripwire could not check the workspace` | Something in the workspace couldn't be read. airlock warns but the command already ran; look at what the code created |
 | `sandbox is busy (stale lock?)` | Another airlock command is running for that sandbox; if not, delete the `.lock` folder named in the message |
 | `sandbox state is unreadable` | Fix or delete the `state.json` named in the message |
 | Something unexpected | Rerun with `AIRLOCK_DEBUG=1` for a stack trace and open an issue |
@@ -178,6 +188,7 @@ Why airlock doesn't attach your editor inside the container: it was built and te
 
 ```bash
 airlock ls                       # what exists
+airlock stop <name>              # stop its containers; keeps everything
 airlock rm <name>                # refuses if you never exported or promoted your work
 airlock rm <name> --force        # delete anyway
 docker image ls 'airlock-*'      # cached images; remove with docker image rm
@@ -194,6 +205,7 @@ docker image ls 'airlock-*'      # cached images; remove with docker image rm
 | Canary credentials | Decoy keys that alert when touched; detection rather than containment |
 | Services beyond Postgres and Redis | Added when a project needs one |
 | Non-Debian custom base images | The image recipe uses `apt-get` |
+| Linux users whose uid isn't 1000 | Containers run as uid 1000; mapping your uid needs testing on Linux |
 
 ## Prior art
 

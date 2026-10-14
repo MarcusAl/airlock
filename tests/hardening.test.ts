@@ -1,7 +1,7 @@
 import { existsSync, mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { decide } from "../src/agent/decide.js";
 import { SandboxPaths } from "../src/core/SandboxPaths.js";
 import { Tripwire } from "../src/core/Tripwire.js";
@@ -108,12 +108,14 @@ describe("Tripwire", () => {
       },
     };
     const neutraliser = {
+      pending: () => true,
       run: async () => {
         events.push("clean");
         return { moved: [], removedLinks: [], removedGit: [] };
       },
     };
     const paths = SandboxPaths.for("demo", mkdtempSync(join(tmpdir(), "airlock-home-")));
+    mkdirSync(paths.dir, { recursive: true });
     await new Tripwire({ backend, neutraliser }).run(paths);
     expect(events).toEqual(["pause", "clean", "unpause"]);
   });
@@ -122,11 +124,12 @@ describe("Tripwire", () => {
 describe("Importer", () => {
   it("leaves nothing behind when the clone fails", async () => {
     const home = mkdtempSync(join(tmpdir(), "airlock-home-"));
-    process.env.AIRLOCK_HOME = home;
+    vi.stubEnv("AIRLOCK_HOME", home);
     const backend = {
       up: async () => {},
       resume: async () => false,
       exec: async () => 0,
+      stop: async () => {},
       remove: async () => {},
       list: async () => [],
       freeze: async <T>(_name: string, work: () => Promise<T>) => work(),
@@ -139,6 +142,6 @@ describe("Importer", () => {
     const importer = new Importer({ runner: new ShellRunner(), backend, cloner });
     await expect(importer.import("https://example.com/x.git", "x")).rejects.toThrow(/clone failed/);
     expect(existsSync(join(home, "x"))).toBe(false);
-    delete process.env.AIRLOCK_HOME;
+    vi.unstubAllEnvs();
   });
 });

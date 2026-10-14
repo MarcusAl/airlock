@@ -74,6 +74,9 @@ $AL run smoke --port 18081 -- sh -c 'nohup node -e "require(\"http\").createServ
 sleep 2
 check "port forward reachable" sh -c 'curl -fs http://127.0.0.1:18081 | grep -q ok'
 check "port bound to loopback only" sh -c "docker port $GW | grep -q '127.0.0.1:18081'"
+check "stop" $AL stop smoke
+check "nothing running after stop" sh -c "test -z \"\$(docker ps -q --filter label=airlock.name=smoke)\""
+check "starts again after stop" $AL exec smoke -- true
 echo hello >"$WS/NOTES.txt" && git -C "$WS" add -A && git -C "$WS" -c user.name=s -c user.email=s@s commit -qm notes
 check "rm refuses unexported work" output_has "never exported" $AL rm smoke
 check "export writes a zip" $AL export smoke -o "$FIX/out.zip"

@@ -2,8 +2,16 @@ import { readdirSync } from "node:fs";
 import { parseArgs } from "node:util";
 import { Sandbox } from "../../core/Sandbox.js";
 import { PRESETS } from "../../presets/presets.js";
-import type { Command } from "../context.js";
+import type { Command, Context } from "../context.js";
 import { isInteractive, requireName } from "./options.js";
+
+const closeNetwork = async (sandbox: Sandbox, ctx: Context): Promise<void> => {
+  try {
+    await ctx.launcher.start(sandbox);
+  } catch (error) {
+    ctx.out.warn(`could not switch the network back to none: ${(error as Error).message}`);
+  }
+};
 
 export const installCommand: Command = {
   name: "install",
@@ -23,7 +31,7 @@ export const installCommand: Command = {
         tty: isInteractive(),
       });
     } finally {
-      if (closed) await ctx.launcher.start(sandbox);
+      if (closed) await closeNetwork(sandbox, ctx);
     }
   },
 };

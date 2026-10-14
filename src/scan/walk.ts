@@ -1,6 +1,7 @@
-import { lstatSync, readdirSync, readlinkSync, realpathSync } from "node:fs";
-import { join, sep } from "node:path";
+import { chmodSync, lstatSync, readdirSync, readlinkSync, realpathSync } from "node:fs";
+import { join } from "node:path";
 import { AirlockError } from "../errors.js";
+import { isInside } from "../paths.js";
 
 export interface RepoFile {
   readonly path: string;
@@ -18,7 +19,9 @@ export interface WalkOptions {
   readonly skipNodeModules?: boolean;
 }
 
-const isGone = (error: unknown): boolean => (error as NodeJS.ErrnoException).code === "ENOENT";
+const codeOf = (error: unknown): string | undefined => (error as NodeJS.ErrnoException).code;
+const isGone = (error: unknown): boolean => ["ENOENT", "ENOTDIR"].includes(codeOf(error) ?? "");
+const isLocked = (error: unknown): boolean => ["EACCES", "EPERM"].includes(codeOf(error) ?? "");
 
 class Walker {
   private seen = 0;
@@ -44,11 +47,14 @@ class Walker {
   }
 
   private entries(rel: string) {
+    const dir = join(this.root, rel);
     try {
-      return readdirSync(join(this.root, rel), { withFileTypes: true });
+      return readdirSync(dir, { withFileTypes: true });
     } catch (error) {
       if (isGone(error)) return [];
-      throw error;
+      if (!isLocked(error)) throw error;
+      chmodSync(dir, 0o700);
+      return readdirSync(dir, { withFileTypes: true });
     }
   }
 
@@ -103,9 +109,6 @@ class Walker {
 
 export const walk = (root: string, options: WalkOptions = {}): RepoFile[] =>
   new Walker(realpathSync.native(root), options).walk("");
-
-export const isInside = (root: string, path: string): boolean =>
-  path === root || path.startsWith(root + sep);
 
 export const escapesRoot = (file: RepoFile): boolean => {
   if (file.kind !== "symlink") return false;

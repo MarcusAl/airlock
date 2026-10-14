@@ -1,9 +1,10 @@
 import type { Backend } from "../backend/Backend.js";
+import { ignoringSignals } from "../process/signals.js";
 import type { Reporter } from "./Reporter.js";
 import type { Sandbox } from "./Sandbox.js";
 import type { SandboxLauncher, StateChanges } from "./SandboxLauncher.js";
 import { specFor } from "./specFor.js";
-import { Tripwire, tripwireMessage } from "./Tripwire.js";
+import { reportPlanted, Tripwire } from "./Tripwire.js";
 
 export interface ExecOptions {
   readonly cwd?: string;
@@ -59,14 +60,14 @@ export class ExecSession {
 
   private async sweep(sandbox: Sandbox): Promise<void> {
     if (this.deps.dryRun) return;
-    try {
-      for (const path of await this.tripwire.run(sandbox.paths)) {
-        this.deps.reporter.warn(tripwireMessage(path));
+    await ignoringSignals(async () => {
+      try {
+        reportPlanted(this.deps.reporter, await this.tripwire.run(sandbox.paths));
+      } catch (error) {
+        this.deps.reporter.warn(
+          `tripwire could not check the workspace: ${(error as Error).message}`,
+        );
       }
-    } catch (error) {
-      this.deps.reporter.warn(
-        `tripwire could not check the workspace: ${(error as Error).message}`,
-      );
-    }
+    });
   }
 }

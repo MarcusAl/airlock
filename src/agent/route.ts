@@ -127,8 +127,11 @@ const writesGit = (tokens: Tokens): boolean =>
       tokens.slice(i + 1).some((next) => typeof next === "string" && WRITE_SUBCOMMANDS.has(next)),
   );
 
+export const boxCommandPrefix = (ctx: RouteContext): string =>
+  quote([...ctx.airlock, "exec", ctx.sandbox]);
+
 const boxCommand = (command: string, ctx: RouteContext): string =>
-  quote([...ctx.airlock, "exec", ctx.sandbox, "--cwd", ctx.relCwd || ".", `--sh=${command}`]);
+  `${boxCommandPrefix(ctx)} ${quote(["--cwd", ctx.relCwd || ".", `--sh=${command}`])}`;
 
 export const route = (command: string, ctx: RouteContext): RouteDecision => {
   let expands = false;

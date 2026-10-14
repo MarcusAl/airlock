@@ -42,6 +42,7 @@ export class DockerBackend implements Backend {
       { dockerfile: spec.image.dockerfile },
       spec.image.refresh,
     );
+    await this.unpauseIfPaused([names(spec.name).app]);
     await this.ensureNetwork(spec.name);
     for (const service of spec.services) {
       await this.ensureContainer(names(spec.name).service(service), hashOf(service), (hash) =>
@@ -57,6 +58,7 @@ export class DockerBackend implements Backend {
 
   async resume(spec: SandboxSpec): Promise<boolean> {
     const n = names(spec.name);
+    await this.unpauseIfPaused([n.app]);
     const inspect = await this.runner.capture("docker", [
       "inspect",
       "-f",
@@ -75,7 +77,35 @@ export class DockerBackend implements Backend {
     try {
       return await work();
     } finally {
-      if (paused) await this.runner.capture("docker", ["unpause", app]);
+      if (paused) await this.unpause(app);
+    }
+  }
+
+  async stop(name: string): Promise<void> {
+    const containers = lines(
+      await this.docker(["ps", "-q", "--filter", `label=airlock.name=${name}`]),
+    );
+    if (containers.length) await this.docker(["stop", ...containers]);
+  }
+
+  private async unpause(container: string): Promise<void> {
+    const result = await this.runner.capture("docker", ["unpause", container]);
+    if (result.code !== 0) {
+      throw new AirlockError(
+        `could not unpause the sandbox; run: docker unpause ${container} (${result.stderr.trim()})`,
+      );
+    }
+  }
+
+  private async unpauseIfPaused(containers: readonly string[]): Promise<void> {
+    for (const container of containers) {
+      const state = await this.runner.capture("docker", [
+        "inspect",
+        "-f",
+        "{{.State.Paused}}",
+        container,
+      ]);
+      if (state.stdout.trim() === "true") await this.unpause(container);
     }
   }
 

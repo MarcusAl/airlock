@@ -10,6 +10,7 @@ import { promoteCommand } from "./commands/promote.js";
 import { rmCommand } from "./commands/rm.js";
 import { runCommand as runSandboxCommand } from "./commands/run.js";
 import { shellCommand } from "./commands/shell.js";
+import { stopCommand } from "./commands/stop.js";
 import { type Command, createContext } from "./context.js";
 
 const COMMANDS: readonly Command[] = [
@@ -22,6 +23,7 @@ const COMMANDS: readonly Command[] = [
   exportCommand,
   promoteCommand,
   lsCommand,
+  stopCommand,
   rmCommand,
 ];
 
