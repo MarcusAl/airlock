@@ -1,0 +1,34 @@
+{
+  "name": "@marcusal/airlock",
+  "version": "0.1.0",
+  "description": "Run untrusted repos (take-homes, random GitHub projects) without letting them touch your machine.",
+  "type": "module",
+  "license": "MIT",
+  "bin": {
+    "airlock": "dist/cli/index.js"
+  },
+  "files": [
+    "dist",
+    "assets"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "check": "biome check .",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "smoke": "scripts/smoke.sh"
+  },
+  "dependencies": {
+    "shell-quote": "^1.12.0"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^2.5.15",
+    "@types/node": "^22.20.5",
+    "@types/shell-quote": "^1.7.5",
+    "typescript": "^7.0.2",
+    "vitest": "^5.0.4"
+  }
+}
