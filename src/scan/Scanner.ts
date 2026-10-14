@@ -13,7 +13,7 @@ export class Scanner {
 
 export const formatReport = (findings: readonly Finding[]): string => {
   if (findings.length === 0) return "Scan: nothing suspicious found.";
-  const line = (f: Finding) => `  [${f.severity}] ${f.path} — ${f.detail}`;
+  const line = (f: Finding) => `  [${f.severity}] ${f.path}: ${f.detail}`;
   const high = findings.filter((f) => f.severity === "high");
   const medium = findings.filter((f) => f.severity === "medium");
   return [

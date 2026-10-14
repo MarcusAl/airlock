@@ -153,7 +153,7 @@ export class Importer {
       return { detected: detectPreset(paths.workspace), warnings: [] };
     } catch (error) {
       if (!(error instanceof AirlockError)) throw error;
-      const warning = "unknown stack; defaulted to node 24 — pass --preset on run";
+      const warning = "unknown stack; defaulted to node 24; pass --preset on run";
       return { detected: { ...FALLBACK }, warnings: [warning] };
     }
   }
