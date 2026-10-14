@@ -46,34 +46,72 @@ From the code's point of view the container is the whole machine: it doesn't kno
 1. **The shared workspace folder.** Files only. The danger is not the box reaching out but writing a file that something on your machine later executes: an editor task, a git hook or filter, a symlink to `~/.ssh`. The quarantine, the read-only `.git`, the tripwire and the hook's path checks all guard this one opening.
 2. **The gateway.** Outbound only as the policy allows and never to your machine; inbound only on ports you publish.
 
-## Quick start
+## Getting started
 
-Prerequisites: Docker (OrbStack, Docker Desktop or Docker Engine), Node.js 22+, git. Optional: Claude Code.
+### 1. Install the prerequisites
+
+| You need | macOS | Linux | Check it works |
+|---|---|---|---|
+| A Docker runtime | [OrbStack](https://orbstack.dev) (`brew install orbstack`) or Docker Desktop | Docker Engine, with your user in the `docker` group | `docker info` prints server details |
+| Node.js 22 or newer | `brew install node`, or nvm | your package manager, or nvm | `node -v` |
+| git | included with Xcode tools | your package manager | `git --version` |
+| Claude Code (optional) | [install guide](https://docs.claude.com/en/docs/claude-code) | same | `claude --version` |
+
+Windows (WSL2 with Docker Desktop) should work but is untested.
+
+### 2. Install airlock
 
 ```bash
 git clone https://github.com/MarcusAl/airlock && cd airlock
 npm ci && npm run build && npm link
+airlock --version          # prints the version
+airlock                    # lists every command
 ```
 
-Try a popular project:
+### 3. Make your editor safe for untrusted folders
+
+See [Editors](#editors). For VS Code and Cursor, turn on `security.workspace.trust.enabled` once.
+
+### 4. Your first sandbox
 
 ```bash
 airlock import https://github.com/bilawalsidhu/gods-eye-view
-airlock install gods-eye-view
-airlock run gods-eye-view --net open --port 4173 -- npm run dev -- --host 0.0.0.0 --port 4173
-# open http://127.0.0.1:4173
 ```
 
-Work on a take-home:
+This clones the repository inside a container, prints a scan report, lists anything it quarantined, and suggests next steps. Then:
+
+```bash
+airlock install gods-eye-view
+airlock run gods-eye-view --net open --port 4173 -- npm run dev -- --host 0.0.0.0 --port 4173
+# open http://127.0.0.1:4173, Ctrl-C to stop
+```
+
+The first `install` or `run` for a language version builds an image, which takes a minute or two; later runs reuse it. Dev servers must listen on `0.0.0.0` inside the box for `--port` to reach them.
+
+### 5. A take-home, with a database and Claude
 
 ```bash
 airlock import https://github.com/acme/take-home --name takehome
-airlock run takehome --with postgres
+airlock run takehome --with postgres       # DATABASE_URL is set inside the box
 airlock install takehome
 airlock exec takehome -- bin/rails db:prepare
-airlock claude takehome              # Claude Code, commands routed into the box
-airlock export takehome              # zip of your commits, ready to submit
+airlock claude takehome                    # Claude Code, commands routed into the box
+airlock export takehome                    # zip of your commits, ready to submit
 ```
+
+Private repository? Clone it yourself, then `airlock import ./path`.
+
+### Where things live
+
+```
+~/sandboxes/<name>/
+  workspace/      the code: open this in your editor
+  quarantined/    editor and agent config moved out of the way
+  exports/        zips, patches and bundles from airlock export
+  state.json      network policy, ports, services, preset
+```
+
+Set `AIRLOCK_HOME` to keep sandboxes somewhere else. Docker resources are named `airlock-<name>*` and labelled `airlock.name=<name>`.
 
 ## Commands
 
@@ -120,6 +158,30 @@ Why airlock doesn't attach your editor inside the container: it was built and te
 - **Your own Claude Code hooks still run on your machine.** A formatter hook in your user settings (Prettier after every edit, say) would load the repository's config on your machine.
 - **`promote` is a trust decision.** Quarantined files that were committed come back with it, and airlock lists them.
 - **Service containers** (`--with postgres|redis`) run the official images without extra hardening; they never run repository code.
+
+## Troubleshooting
+
+| Message or symptom | What to do |
+|---|---|
+| `Docker isn't running` | Start OrbStack or Docker Desktop, then retry |
+| `` `docker` isn't installed or isn't on your PATH `` | Install a Docker runtime (step 1) |
+| `port N is already in use on this machine` | Something else holds the port: pick another `--port` or stop it |
+| `couldn't pull the base image` | Check your network, the `--version`, or the `--image` reference |
+| A download fails inside the box | The network is `none` by default. Use `--net allowlist --allow <host>`, or `--net open`. `docker logs airlock-<name>-gw` shows each request the gateway refused (`TCP_DENIED`) |
+| `the network gateway stopped right after starting` | The message includes the gateway's log. Usually an invalid `--allow` value |
+| Claude says a call was blocked by airlock | Expected for files outside the workspace, unknown tools and git writes other than plain `add`, `commit -m` and `restore`. The message says why |
+| `sandbox is busy (stale lock?)` | Another airlock command is running for that sandbox; if not, delete the `.lock` folder named in the message |
+| `sandbox state is unreadable` | Fix or delete the `state.json` named in the message |
+| Something unexpected | Rerun with `AIRLOCK_DEBUG=1` for a stack trace and open an issue |
+
+## Cleaning up
+
+```bash
+airlock ls                       # what exists
+airlock rm <name>                # refuses if you never exported or promoted your work
+airlock rm <name> --force        # delete anyway
+docker image ls 'airlock-*'      # cached images; remove with docker image rm
+```
 
 ## Not in v1
 
