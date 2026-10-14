@@ -3,7 +3,6 @@ export const names = (sandbox: string) => ({
   gateway: `airlock-${sandbox}-gw`,
   network: `airlock-${sandbox}`,
   cache: `airlock-${sandbox}-cache`,
-  cursor: `airlock-${sandbox}-cursor`,
   volume: (rel: string) => `airlock-${sandbox}-${rel.replaceAll("/", "-")}`,
   service: (service: string) => `airlock-${sandbox}-${service}`,
 });

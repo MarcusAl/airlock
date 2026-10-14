@@ -125,7 +125,7 @@ export class DockerBackend implements Backend {
 
   private async ensureVolumes(spec: SandboxSpec): Promise<void> {
     const n = names(spec.name);
-    for (const volume of [n.cache, n.cursor, ...spec.workspaceVolumes.map(n.volume)]) {
+    for (const volume of [n.cache, ...spec.workspaceVolumes.map(n.volume)]) {
       if (await this.exists("volume", volume)) continue;
       await this.docker(["volume", "create", "--label", `airlock.name=${spec.name}`, volume]);
       await this.docker([

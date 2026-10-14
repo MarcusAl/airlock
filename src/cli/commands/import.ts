@@ -10,8 +10,9 @@ const nextSteps = (name: string): string[] => [
   `  airlock install ${name}        # dependencies, registry-only network`,
   `  airlock run ${name} --port 3000 -- <your dev command>`,
   `  airlock claude ${name}         # your Claude Code, commands routed into the box`,
-  `  airlock code ${name}           # Cursor attached inside the box`,
-  "Opening the folder in Cursor directly? Turn on Workspace Trust first (security.workspace.trust.enabled).",
+  "",
+  "Edit the files in any editor; nothing runs on your machine unless the editor runs it.",
+  "VS Code / Cursor: turn on Workspace Trust (security.workspace.trust.enabled) so the folder opens in Restricted Mode.",
 ];
 
 export const importCommand: Command = {

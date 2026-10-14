@@ -47,7 +47,6 @@ const workspaceMounts = (spec: SandboxSpec): string[] => {
     ...mount(`type=bind,src=${workspace},dst=/work`),
     ...mount(`type=bind,src=${workspace}/.git,dst=/work/.git,readonly`),
     ...mount(`type=volume,src=${n.cache},dst=/cache`),
-    ...mount(`type=volume,src=${n.cursor},dst=/home/airlock/.cursor-server`),
     ...spec.workspaceVolumes.flatMap((rel) =>
       mount(`type=volume,src=${n.volume(rel)},dst=/work/${rel}`),
     ),
