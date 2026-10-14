@@ -25,7 +25,7 @@ export const runCommand: Command = {
       allowPositionals: true,
       options: { ...SANDBOX_OPTIONS, ...EXEC_OPTIONS },
     });
-    const sandbox = Sandbox.open(requireName(positionals, USAGE), ctx.runner);
+    const sandbox = Sandbox.open(requireName(positionals, USAGE));
     const changes = changesFrom(values);
     if (command.length > 0) {
       return ctx.session.run(sandbox, quote(command), {

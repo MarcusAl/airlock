@@ -11,7 +11,7 @@ export const installCommand: Command = {
   dryRunnable: true,
   async execute(argv, ctx) {
     const { positionals } = parseArgs({ args: argv, allowPositionals: true });
-    const sandbox = Sandbox.open(requireName(positionals, "airlock install <name>"), ctx.runner);
+    const sandbox = Sandbox.open(requireName(positionals, "airlock install <name>"));
     const state = sandbox.store.load();
     const files = new Set(readdirSync(sandbox.paths.workspace));
     const command = PRESETS[state.preset].installCommand(files);

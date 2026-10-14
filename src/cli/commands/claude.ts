@@ -30,7 +30,7 @@ export const claudeCommand: Command = {
       allowPositionals: true,
       options: { "allow-mcp": { type: "boolean" } },
     });
-    const sandbox = Sandbox.open(requireName(positionals, USAGE), ctx.runner);
+    const sandbox = Sandbox.open(requireName(positionals, USAGE));
     await tripwire(sandbox, ctx);
     remindHighFindings(sandbox, ctx);
     const launcher = new ClaudeLauncher({ runner: ctx.runner, launcher: ctx.launcher });

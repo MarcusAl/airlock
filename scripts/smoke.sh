@@ -54,8 +54,13 @@ $AL run smoke --port 18081 -- sh -c 'nohup node -e "require(\"http\").createServ
 sleep 2
 check "port forward reachable" sh -c 'curl -fs http://127.0.0.1:18081 | grep -q ok'
 check "port bound to loopback only" sh -c "docker port airlock-smoke-gw | grep -q '127.0.0.1:18081'"
-docker rm -f $(docker ps -aq --filter label=airlock.name=smoke) >/dev/null 2>&1
-docker volume rm $(docker volume ls -q --filter label=airlock.name=smoke) >/dev/null 2>&1
-docker network rm airlock-smoke >/dev/null 2>&1
+WS="$AIRLOCK_HOME/smoke/workspace"
+echo hello >"$WS/NOTES.txt" && git -C "$WS" add -A && git -C "$WS" -c user.name=s -c user.email=s@s commit -qm notes
+check "rm refuses unexported work" sh -c "! $AL rm smoke"
+check "export writes a zip" $AL export smoke -o "$FIX/out.zip"
+check "zip holds the new commit" sh -c "unzip -l $FIX/out.zip | grep -q NOTES.txt"
+check "rm --dry-run leaves everything" sh -c "$AL rm smoke --dry-run && test -d $AIRLOCK_HOME/smoke"
+check "rm after export" $AL rm smoke
+check "rm removed containers" sh -c "test -z \"\$(docker ps -aq --filter label=airlock.name=smoke)\""
 echo "failures: $fails"
 exit $fails

@@ -39,7 +39,7 @@ export interface SandboxStatus {
 
 export interface Backend {
   up(spec: SandboxSpec): Promise<void>;
-  start(name: string): Promise<boolean>;
+  resume(spec: SandboxSpec): Promise<boolean>;
   exec(request: ExecRequest): Promise<number>;
   remove(name: string): Promise<void>;
   list(): Promise<SandboxStatus[]>;

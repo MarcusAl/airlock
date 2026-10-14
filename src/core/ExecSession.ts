@@ -3,6 +3,7 @@ import { Neutraliser } from "../importer/Neutraliser.js";
 import type { Reporter } from "./Reporter.js";
 import type { Sandbox } from "./Sandbox.js";
 import type { SandboxLauncher, StateChanges } from "./SandboxLauncher.js";
+import { specFor } from "./specFor.js";
 
 export interface ExecOptions {
   readonly cwd?: string;
@@ -46,7 +47,8 @@ export class ExecSession {
 
   private async ensureUp(sandbox: Sandbox, options: ExecOptions): Promise<void> {
     const fast = !hasChanges(options.changes) && !options.refresh;
-    if (fast && (await this.deps.backend.start(sandbox.paths.name))) return;
+    const spec = specFor(sandbox.store.load(), sandbox.paths);
+    if (fast && (await this.deps.backend.resume(spec))) return;
     await this.deps.launcher.start(sandbox, options.changes, {
       persist: options.persist,
       refresh: options.refresh,

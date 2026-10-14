@@ -2,9 +2,12 @@ import { readFileSync } from "node:fs";
 import { AirlockError } from "../errors.js";
 import { claudeCommand } from "./commands/claude.js";
 import { execCommand } from "./commands/exec.js";
+import { exportCommand } from "./commands/export.js";
 import { importCommand } from "./commands/import.js";
 import { installCommand } from "./commands/install.js";
 import { lsCommand } from "./commands/ls.js";
+import { promoteCommand } from "./commands/promote.js";
+import { rmCommand } from "./commands/rm.js";
 import { runCommand as runSandboxCommand } from "./commands/run.js";
 import { shellCommand } from "./commands/shell.js";
 import { type Command, createContext } from "./context.js";
@@ -16,7 +19,10 @@ const COMMANDS: readonly Command[] = [
   execCommand,
   shellCommand,
   claudeCommand,
+  exportCommand,
+  promoteCommand,
   lsCommand,
+  rmCommand,
 ];
 
 const version = (): string =>

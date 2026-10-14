@@ -9,7 +9,7 @@ export const shellCommand: Command = {
   dryRunnable: true,
   async execute(argv, ctx) {
     const { positionals } = parseArgs({ args: argv, allowPositionals: true });
-    const sandbox = Sandbox.open(requireName(positionals, "airlock shell <name>"), ctx.runner);
+    const sandbox = Sandbox.open(requireName(positionals, "airlock shell <name>"));
     return ctx.session.run(sandbox, "bash", { tty: true });
   },
 };

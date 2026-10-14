@@ -25,6 +25,9 @@ const appHash = ({ policy: _policy, ports: _ports, ...rest }: SandboxSpec): stri
 
 const lines = (out: string): string[] => out.split("\n").filter(Boolean);
 
+const gatewayHash = (spec: SandboxSpec): string =>
+  hashOf([gatewayImageTag(), compileSquidConfig(spec.policy), spec.ports]);
+
 export class DockerBackend implements Backend {
   constructor(
     private readonly runner: ProcessRunner,
@@ -50,10 +53,18 @@ export class DockerBackend implements Backend {
     await this.ensureGateway(spec);
   }
 
-  async start(name: string): Promise<boolean> {
-    const n = names(name);
-    if ((await this.runner.capture("docker", ["start", n.app])).code !== 0) return false;
-    return (await this.runner.capture("docker", ["start", n.gateway])).code === 0;
+  async resume(spec: SandboxSpec): Promise<boolean> {
+    const n = names(spec.name);
+    const inspect = await this.runner.capture("docker", [
+      "inspect",
+      "-f",
+      '{{index .Config.Labels "airlock.config"}}',
+      n.app,
+      n.gateway,
+    ]);
+    const [app, gateway] = lines(inspect.stdout).map((line) => line.trim());
+    if (inspect.code !== 0 || app !== appHash(spec) || gateway !== gatewayHash(spec)) return false;
+    return (await this.runner.capture("docker", ["start", n.app, n.gateway])).code === 0;
   }
 
   exec(request: ExecRequest): Promise<number> {
@@ -161,7 +172,7 @@ export class DockerBackend implements Backend {
     await this.images.ensure(image, { context: GATEWAY_ASSETS });
     const squidConf = compileSquidConfig(spec.policy);
     const n = names(spec.name);
-    await this.ensureContainer(n.gateway, hashOf([image, squidConf, spec.ports]), async (hash) => {
+    await this.ensureContainer(n.gateway, gatewayHash(spec), async (hash) => {
       await assertPortsFree(spec.ports);
       await this.docker(
         gatewayCreateArgs({ sandbox: spec.name, image, squidConf, ports: spec.ports, hash }),

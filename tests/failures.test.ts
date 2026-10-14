@@ -87,4 +87,22 @@ describe("failure messages", () => {
     );
     server.close();
   });
+
+  it("will not resume containers built for a different configuration", async () => {
+    const stale: ProcessRunner = {
+      capture: async () => ({ code: 0, stdout: "stale-hash true\n", stderr: "" }),
+      interactive: async () => 0,
+    };
+    const spec = {
+      name: "demo",
+      image: { tag: "t", dockerfile: "FROM x" },
+      workspace: "/tmp/ws",
+      env: {},
+      workspaceVolumes: [],
+      policy: { mode: "none" as const, allow: [] },
+      ports: [],
+      services: [],
+    };
+    expect(await new DockerBackend(stale).resume(spec)).toBe(false);
+  });
 });

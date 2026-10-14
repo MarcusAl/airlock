@@ -18,7 +18,7 @@ export const execCommand: Command = {
       allowPositionals: true,
       options: { ...EXEC_OPTIONS, sh: { type: "string" } },
     });
-    const sandbox = Sandbox.open(requireName(positionals, USAGE), ctx.runner);
+    const sandbox = Sandbox.open(requireName(positionals, USAGE));
     const script = values.sh ?? (command.length > 0 ? quote(command) : "");
     if (!script) throw new AirlockError(`usage: ${USAGE}`);
     return ctx.session.run(sandbox, script, {

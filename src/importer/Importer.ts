@@ -1,5 +1,6 @@
 import { cpSync, existsSync, mkdirSync, readdirSync } from "node:fs";
 import { basename, resolve } from "node:path";
+import type { Backend } from "../backend/Backend.js";
 import { SandboxPaths } from "../core/SandboxPaths.js";
 import { type SandboxState, StateStore } from "../core/StateStore.js";
 import { AirlockError } from "../errors.js";
@@ -34,8 +35,16 @@ export class Importer {
   private readonly scanner: Scanner;
   private readonly neutraliser: Neutraliser;
 
-  constructor(deps: { runner: ProcessRunner; scanner?: Scanner; neutraliser?: Neutraliser }) {
+  private readonly backend: Backend;
+
+  constructor(deps: {
+    runner: ProcessRunner;
+    backend: Backend;
+    scanner?: Scanner;
+    neutraliser?: Neutraliser;
+  }) {
     this.runner = deps.runner;
+    this.backend = deps.backend;
     this.scanner = deps.scanner ?? new Scanner();
     this.neutraliser = deps.neutraliser ?? new Neutraliser();
   }
@@ -43,6 +52,7 @@ export class Importer {
   async import(source: string, name: string): Promise<ImportResult> {
     const paths = SandboxPaths.for(name);
     if (existsSync(paths.dir)) throw new AirlockError(`sandbox "${name}" already exists`);
+    await this.backend.remove(name);
     mkdirSync(paths.workspace, { recursive: true });
     await this.fetch(source, paths);
     const git = new Git(paths.workspace, this.runner);
