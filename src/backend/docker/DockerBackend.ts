@@ -1,6 +1,6 @@
 import type { ProcessRunner } from "../../process/ProcessRunner.js";
 import type { Backend, ExecRequest, SandboxSpec, SandboxStatus } from "../Backend.js";
-import { appRunArgs, execArgs, serviceRunArgs } from "./args.js";
+import { appRunArgs, execArgs, serviceRunArgs, terminateArgs } from "./args.js";
 import { DockerClient } from "./DockerClient.js";
 import { Gateway, gatewayHash, hashOf } from "./Gateway.js";
 import { ImageBuilder } from "./ImageBuilder.js";
@@ -11,20 +11,32 @@ import { Reconciler } from "./Reconciler.js";
 
 const appHash = ({ policy: _policy, ports: _ports, ...rest }: SandboxSpec): string => hashOf(rest);
 
+export interface BackendOptions {
+  readonly dryRun?: boolean;
+  readonly images?: ImageBuilder;
+  readonly ports?: PortGuard;
+  readonly onBuild?: (tag: string) => void;
+}
+
 export class DockerBackend implements Backend {
   private readonly docker: DockerClient;
   private readonly reconciler: Reconciler;
   private readonly gateway: Gateway;
   private readonly pauses: PauseControl;
 
-  constructor(
-    runner: ProcessRunner,
-    private readonly images: ImageBuilder = new ImageBuilder(runner),
-    ports: PortGuard = new PortGuard(),
-  ) {
+  private readonly images: ImageBuilder;
+
+  constructor(runner: ProcessRunner, options: BackendOptions = {}) {
     this.docker = new DockerClient(runner);
+    this.images = options.images ?? new ImageBuilder(runner, options.onBuild);
     this.reconciler = new Reconciler(this.docker);
-    this.gateway = new Gateway({ docker: this.docker, images, ports, reconciler: this.reconciler });
+    this.gateway = new Gateway({
+      docker: this.docker,
+      images: this.images,
+      ports: options.ports ?? new PortGuard(),
+      reconciler: this.reconciler,
+      dryRun: options.dryRun ?? false,
+    });
     this.pauses = new PauseControl(this.docker);
   }
 
@@ -79,6 +91,10 @@ export class DockerBackend implements Backend {
       '{{.Label "airlock.home"}}',
     ]);
     return homes.find(Boolean);
+  }
+
+  async terminate(name: string, execId: string): Promise<void> {
+    await this.docker.attempt(terminateArgs(name, execId));
   }
 
   async stop(name: string): Promise<void> {

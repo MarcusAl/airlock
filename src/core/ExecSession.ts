@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import type { Backend } from "../backend/Backend.js";
 import { ignoringSignals } from "../process/signals.js";
 import type { Reporter } from "./Reporter.js";
@@ -35,6 +36,10 @@ export class ExecSession {
 
   async run(sandbox: Sandbox, command: string, options: ExecOptions = {}): Promise<number> {
     await this.ensureUp(sandbox, options);
+    const id = randomUUID();
+    const stopInBox = () => void this.deps.backend.terminate(sandbox.paths.name, id);
+    process.on("SIGTERM", stopInBox);
+    process.on("SIGHUP", stopInBox);
     try {
       return await this.deps.backend.exec({
         name: sandbox.paths.name,
@@ -42,8 +47,11 @@ export class ExecSession {
         cwd: options.cwd ?? ".",
         envKeys: options.envKeys ?? [],
         tty: options.tty ?? false,
+        id,
       });
     } finally {
+      process.off("SIGTERM", stopInBox);
+      process.off("SIGHUP", stopInBox);
       await this.sweep(sandbox);
     }
   }

@@ -17,6 +17,7 @@ const USAGE =
 export const runCommand: Command = {
   name: "run",
   summary: "start (or reconfigure) a sandbox, optionally running a command",
+  usage: USAGE,
   dryRunnable: true,
   async execute(argv, ctx) {
     const { own, command } = splitDash(argv);

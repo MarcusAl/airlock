@@ -79,6 +79,7 @@ check "nothing running after stop" sh -c "test -z \"\$(docker ps -q --filter lab
 check "starts again after stop" $AL exec smoke -- true
 echo hello >"$WS/NOTES.txt" && git -C "$WS" add -A && git -C "$WS" -c user.name=s -c user.email=s@s commit -qm notes
 check "rm refuses unexported work" output_has "never exported" $AL rm smoke
+check "rm on a missing sandbox fails" output_has "no sandbox" $AL rm nosuch
 check "export writes a zip" $AL export smoke -o "$FIX/out.zip"
 check "zip holds the new commit" sh -c "unzip -l $FIX/out.zip | grep -q NOTES.txt"
 check "rm --dry-run leaves everything" sh -c "$AL rm smoke --dry-run && test -d $AIRLOCK_HOME/smoke"

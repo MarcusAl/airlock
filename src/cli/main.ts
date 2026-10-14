@@ -32,7 +32,7 @@ const version = (): string =>
 
 const help = (): string =>
   [
-    "usage: airlock <command> [args] [--dry-run]",
+    "usage: airlock <command> [args]   (airlock <command> --help for details)",
     "",
     ...COMMANDS.map((c) => `  ${c.name.padEnd(9)} ${c.summary}`),
   ].join("\n");
@@ -47,8 +47,14 @@ const splitDryRun = (argv: readonly string[]): { dryRun: boolean; args: string[]
   };
 };
 
-const describe = (error: unknown): string => {
+const isParseError = (error: unknown): boolean =>
+  String((error as NodeJS.ErrnoException).code ?? "").startsWith("ERR_PARSE_ARGS");
+
+const describe = (error: unknown, command?: Command): string => {
   if (error instanceof AirlockError) return error.message;
+  if (isParseError(error) && command) {
+    return `${(error as Error).message.split(". ")[0]}; see airlock ${command.name} --help`;
+  }
   if (process.env.AIRLOCK_DEBUG)
     return error instanceof Error ? (error.stack ?? error.message) : String(error);
   const message = error instanceof Error ? error.message : String(error);
@@ -62,9 +68,22 @@ const runCommand = async (command: Command, args: string[], dryRun: boolean): Pr
     }
     return await command.execute(args, createContext({ dryRun }));
   } catch (error) {
-    process.stderr.write(`airlock: ${describe(error)}\n`);
+    process.stderr.write(`airlock: ${describe(error, command)}\n`);
     return 1;
   }
+};
+
+const HELP_NAMES = new Set([undefined, "help", "--help", "-h"]);
+
+const unknown = (name: string | undefined): number => {
+  if (!HELP_NAMES.has(name)) process.stderr.write(`airlock: unknown command: ${name}\n`);
+  process.stdout.write(`${help()}\n`);
+  return HELP_NAMES.has(name) ? 0 : 1;
+};
+
+const wantsHelp = (args: readonly string[]): boolean => {
+  const cut = args.indexOf("--");
+  return (cut < 0 ? args : args.slice(0, cut)).some((a) => a === "--help" || a === "-h");
 };
 
 export const main = async (argv: string[]): Promise<number> => {
@@ -75,9 +94,10 @@ export const main = async (argv: string[]): Promise<number> => {
     return 0;
   }
   const command = COMMANDS.find((c) => c.name === name);
-  if (!command) {
-    process.stdout.write(`${help()}\n`);
-    return name === undefined || name === "help" ? 0 : 1;
+  if (!command) return unknown(name);
+  if (wantsHelp(rest)) {
+    process.stdout.write(`usage: ${command.usage}\n\n${command.summary}\n`);
+    return 0;
   }
   return runCommand(command, rest, dryRun);
 };

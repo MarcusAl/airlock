@@ -35,6 +35,7 @@ export class Importer {
 
   private readonly backend: Backend;
   private readonly cloner: Cloner;
+  private readonly warnings: string[] = [];
 
   constructor(deps: {
     runner: ProcessRunner;
@@ -73,7 +74,20 @@ export class Importer {
     const head = (await git.run(["rev-parse", "HEAD"])).trim();
     const state = this.initialState(source, name, head, moved, detected);
     new StateStore(paths).save(state);
-    return { state, findings, moved, warnings };
+    return { state, findings, moved, warnings: [...this.warnings, ...warnings] };
+  }
+
+  private async warnIfDirty(local: string): Promise<void> {
+    const status = await new Git(local, this.runner).run([
+      "status",
+      "--porcelain",
+      "--ignore-submodules=all",
+    ]);
+    if (status.trim()) {
+      this.warnings.push(
+        `${local} has uncommitted changes; only committed work is imported. Commit first if you need them.`,
+      );
+    }
   }
 
   private async clearLeftovers(name: string, paths: SandboxPaths): Promise<void> {
@@ -93,6 +107,7 @@ export class Importer {
       throw new AirlockError(`not an https URL or an existing path: ${source}`);
     }
     if (existsSync(`${local}/.git`)) {
+      await this.warnIfDirty(local);
       return this.cloner.clone({ url: "/src", localPath: local }, paths.workspace);
     }
     return this.copyPlainDirectory(local, paths);

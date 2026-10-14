@@ -76,6 +76,8 @@ See [Editors](#editors). For VS Code and Cursor, turn on `security.workspace.tru
 
 ### 4. Your first sandbox
 
+Sandboxes live in `~/sandboxes/<name>` (set `AIRLOCK_HOME` to put them elsewhere, for example to try airlock out in a scratch folder).
+
 ```bash
 airlock import https://github.com/bilawalsidhu/gods-eye-view
 ```
@@ -88,7 +90,7 @@ airlock run gods-eye-view --net open --port 4173 -- npm run dev -- --host 0.0.0.
 # open http://127.0.0.1:4173, Ctrl-C to stop
 ```
 
-The first `install` or `run` for a language version builds an image, which takes a minute or two; later runs reuse it. Dev servers must listen on `0.0.0.0` inside the box for `--port` to reach them.
+The first `install` or `run` for a language version builds an image (airlock says so), which takes a minute or two; later runs reuse it. Dev servers must listen on `0.0.0.0` inside the box for `--port` to reach them.
 
 ### 5. A take-home, with a database and Claude
 
@@ -98,14 +100,14 @@ airlock run takehome --with postgres       # DATABASE_URL is set inside the box
 airlock install takehome
 airlock exec takehome -- bin/rails db:prepare
 airlock claude takehome                    # Claude Code, commands routed into the box
-airlock export takehome                    # zip of your commits, ready to submit
+airlock export takehome                    # zip of the repo at your latest commit, ready to submit
 ```
 
-Private repository? Clone it yourself, then `airlock import ./path`.
+Private repository? Clone it yourself, then `airlock import ./path`. Only committed work is imported; airlock warns if the folder has uncommitted changes.
 
 Inside `airlock claude`, commands Claude routes into the box run without asking you each time (they can only touch the box). Git commands that run on your machine, web fetches and MCP tools still ask.
 
-When you're done for the day, `airlock stop <name>` stops the sandbox's containers, including any dev server still running in them.
+When you're done for the day, `airlock stop <name>` stops the sandbox's containers, including any dev server still running in them. Stopping a command (Ctrl-C, or a terminate signal) also stops the processes it started inside the box.
 
 ### Where things live
 
@@ -129,13 +131,13 @@ Set `AIRLOCK_HOME` to keep sandboxes somewhere else. Docker resources are named 
 | `exec <n> [--cwd dir] [--env KEY] -- cmd` | Run one command in the sandbox (`--sh='…'` for a shell string) |
 | `shell <n>` | Interactive shell in the sandbox |
 | `claude <n> [--allow-mcp] [-- args]` | Your Claude Code with commands routed into the sandbox |
-| `export <n> [--zip\|--patch\|--bundle] [-o file]` | Committed work as a submission artifact |
+| `export <n> [--zip\|--patch\|--bundle] [-o file]` | The repo at your latest commit (zip), your commits since import (patch), or everything (bundle). Uncommitted changes are left out |
 | `promote <n> --to <dir>` | Copy out as a normal repo once you trust it |
 | `ls` | List sandboxes |
 | `stop <n>` | Stop the sandbox's containers and anything running in them |
-| `rm <n> [--force]` | Delete; refuses if work was never exported or promoted |
+| `rm <n> [--force]` | Delete; refuses while there are uncommitted changes or commits you never exported or promoted |
 
-`run` options: `--net none|allowlist|open`, `--allow <host>`, `--port <p>` (published on 127.0.0.1 only), `--with postgres|redis`, `--env <KEY>` (forward one variable from your shell; nothing is passed implicitly), `--preset node|ruby|python|go`, `--version <v>`, `--image <ref>` and `--apt <package>` (Debian or Ubuntu bases only), `--rebuild` (pull the base image again for updates). `run`, `install`, `exec`, `shell` and `rm` accept `--dry-run` to print the Docker commands instead.
+`run` options: `--net none|allowlist|open`, `--allow <host>`, `--port <p>` (published on 127.0.0.1 only), `--with postgres|redis`, `--env <KEY>` (forward one variable from your shell; nothing is passed implicitly), `--preset node|ruby|python|go`, `--version <v>`, `--image <ref>` and `--apt <package>` (Debian or Ubuntu bases only), `--rebuild` (pull the base image again for updates). `run`, `install`, `exec`, `shell`, `stop` and `rm` accept `--dry-run` to print the Docker commands that would change things instead of running them. Every command accepts `--help`.
 
 Presets detect the stack from lockfiles and pinned versions (`.nvmrc`, `engines`, `.ruby-version`, `Gemfile`, `.python-version`, `go.mod`). The repository's own Dockerfile is never built: its `RUN` steps would execute as root with network access.
 
@@ -175,7 +177,9 @@ Why airlock doesn't attach your editor inside the container: it was built and te
 | `port N is already in use on this machine` | Something else holds the port: pick another `--port` or stop it |
 | `couldn't pull the base image` | Check your network, the `--version`, or the `--image` reference |
 | A download fails inside the box | The network is `none` by default. Use `--net allowlist --allow <host>`, or `--net open`. `docker logs airlock-<name>-gw` shows each request the gateway refused (`TCP_DENIED`) |
-| `the network gateway stopped right after starting` | The message includes the gateway's log. Usually an invalid `--allow` value |
+| `the network gateway stopped right after starting` | The message includes the gateway's log; please open an issue with it |
+| `docker … didn't finish in time` | Docker stopped responding. Check OrbStack or Docker Desktop is running and not stuck, then retry |
+| npm says install scripts were skipped (`install-scripts not yet covered by allowScripts`) | npm 11 blocks dependencies' install scripts until approved. If the app needs one, approve it inside the box: `airlock exec <name> -- npm install-scripts approve <package>`, then `airlock install <name>` again |
 | Claude says a call was blocked by airlock | Expected for files outside the workspace, unknown tools and git writes other than plain `add`, `commit -m` and `restore`. The message says why |
 | `container is paused` | A cleanup was interrupted. The next `run`, `exec`, `install`, `shell` or `claude` unpauses it, or run `docker unpause airlock-<name>` |
 | `tripwire: <folder> (unreadable, so not checked)` | Code in the box made a folder unreadable. Your tools can't read it either, and airlock won't change permissions on your machine. Fix it from inside the box, e.g. `airlock exec <name> -- chmod -R u+rwx <folder>`, and the next check covers it |
@@ -190,7 +194,7 @@ Why airlock doesn't attach your editor inside the container: it was built and te
 ```bash
 airlock ls                       # what exists
 airlock stop <name>              # stop its containers; keeps everything
-airlock rm <name>                # refuses if you never exported or promoted your work
+airlock rm <name>                # refuses while there's uncommitted or unexported work
 airlock rm <name> --force        # delete anyway
 docker image ls 'airlock-*'      # cached images; remove with docker image rm
 ```

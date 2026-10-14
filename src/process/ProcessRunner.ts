@@ -11,6 +11,7 @@ export interface RunOptions {
   readonly cwd?: string;
   readonly env?: NodeJS.ProcessEnv;
   readonly input?: string;
+  readonly timeoutMs?: number;
 }
 
 export interface CaptureResult {
@@ -25,6 +26,10 @@ export interface ProcessRunner {
 }
 
 const KILL_AFTER_MS = 10_000;
+const TIMED_OUT = 124;
+
+export const timedOut = (result: CaptureResult): boolean =>
+  /timed out after \d+s$/.test(result.stderr);
 
 const ignoreClosedPipe = (error: NodeJS.ErrnoException): void => {
   if (error.code !== "EPIPE") throw error;
@@ -50,7 +55,16 @@ export class ShellRunner implements ProcessRunner {
         stderr += chunk;
       });
       child.on("error", (error) => reject(missingProgram(cmd)(error)));
-      child.on("close", (code) => resolve({ code: code ?? 1, stdout, stderr }));
+      const timer = options.timeoutMs
+        ? setTimeout(() => {
+            stderr += `\ntimed out after ${Math.round((options.timeoutMs ?? 0) / 1000)}s`;
+            child.kill("SIGKILL");
+          }, options.timeoutMs)
+        : undefined;
+      child.on("close", (code) => {
+        clearTimeout(timer);
+        resolve({ code: code ?? TIMED_OUT, stdout, stderr });
+      });
       if (options.input !== undefined && child.stdin) {
         child.stdin.on("error", ignoreClosedPipe);
         child.stdin.end(options.input);
@@ -83,12 +97,23 @@ export class ShellRunner implements ProcessRunner {
   }
 }
 
+const READ_ONLY = new Set(["ps", "inspect", "images", "ls"]);
+
+const isReadOnly = (cmd: string, args: readonly string[]): boolean =>
+  cmd === "docker" && (READ_ONLY.has(args[0] ?? "") || READ_ONLY.has(args[1] ?? ""));
+
 export class DryRunRunner implements ProcessRunner {
   constructor(
     private readonly print: (line: string) => void = (line) => process.stdout.write(`${line}\n`),
+    private readonly reader: ProcessRunner = new ShellRunner(),
   ) {}
 
-  async capture(cmd: string, args: readonly string[]): Promise<CaptureResult> {
+  async capture(
+    cmd: string,
+    args: readonly string[],
+    options?: RunOptions,
+  ): Promise<CaptureResult> {
+    if (isReadOnly(cmd, args)) return this.reader.capture(cmd, args, options);
     this.print(`$ ${formatCommand(cmd, args)}`);
     return { code: 0, stdout: "", stderr: "" };
   }

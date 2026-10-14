@@ -17,6 +17,7 @@ export interface Context {
 export interface Command {
   readonly name: string;
   readonly summary: string;
+  readonly usage: string;
   readonly dryRunnable?: boolean;
   execute(argv: string[], ctx: Context): Promise<number>;
 }
@@ -24,7 +25,11 @@ export interface Command {
 export const createContext = ({ dryRun }: { dryRun: boolean }): Context => {
   const runner = dryRun ? new DryRunRunner() : new ShellRunner();
   const out = new Output();
-  const backend = new DockerBackend(runner);
+  const backend = new DockerBackend(runner, {
+    dryRun,
+    onBuild: (tag) =>
+      out.info(`Building image ${tag} (first time only; this can take a minute or two)...`),
+  });
   const launcher = new SandboxLauncher({ backend, dryRun });
   const session = new ExecSession({ launcher, backend, reporter: out, dryRun });
   return { dryRun, runner, out, backend, launcher, session };

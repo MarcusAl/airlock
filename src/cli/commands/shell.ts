@@ -6,6 +6,7 @@ import { requireName } from "./options.js";
 export const shellCommand: Command = {
   name: "shell",
   summary: "open an interactive shell inside a sandbox",
+  usage: "airlock shell <name>",
   dryRunnable: true,
   async execute(argv, ctx) {
     const { positionals } = parseArgs({ args: argv, allowPositionals: true });

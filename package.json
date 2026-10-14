@@ -2,8 +2,25 @@
   "name": "@marcusal/airlock",
   "version": "0.1.0",
   "description": "Run untrusted repos (take-homes, random GitHub projects) without letting them touch your machine.",
-  "type": "module",
+  "keywords": [
+    "sandbox",
+    "docker",
+    "security",
+    "claude-code",
+    "take-home",
+    "untrusted-code"
+  ],
+  "homepage": "https://github.com/MarcusAl/airlock#readme",
+  "bugs": {
+    "url": "https://github.com/MarcusAl/airlock/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/MarcusAl/airlock.git"
+  },
   "license": "MIT",
+  "author": "Marcus Allen",
+  "type": "module",
   "bin": {
     "airlock": "dist/cli/index.js"
   },
@@ -19,7 +36,8 @@
     "check": "biome check .",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "smoke": "scripts/smoke.sh"
+    "smoke": "scripts/smoke.sh",
+    "prepublishOnly": "npm run check && npm run typecheck && npm test && npm run build"
   },
   "dependencies": {
     "shell-quote": "^1.12.0"

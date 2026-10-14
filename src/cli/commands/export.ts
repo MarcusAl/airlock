@@ -1,3 +1,4 @@
+import { statSync } from "node:fs";
 import { parseArgs } from "node:util";
 import { Sandbox } from "../../core/Sandbox.js";
 import { AirlockError } from "../../errors.js";
@@ -16,6 +17,7 @@ const formatOf = (values: { zip?: boolean; patch?: boolean; bundle?: boolean }):
 export const exportCommand: Command = {
   name: "export",
   summary: "write the sandbox's committed work to a zip, patch or git bundle",
+  usage: USAGE,
   async execute(argv, ctx) {
     const { values, positionals } = parseArgs({
       args: argv,
@@ -31,7 +33,11 @@ export const exportCommand: Command = {
     if ((await sandbox.pendingWork()).dirty) {
       ctx.out.warn("uncommitted changes are not included; commit them first to export them");
     }
-    const file = await new Exporter().export(sandbox, formatOf(values), values.out);
+    const format = formatOf(values);
+    const file = await new Exporter().export(sandbox, format, values.out);
+    if (format === "patch" && statSync(file).size === 0) {
+      ctx.out.warn("no commits since import, so the patch is empty");
+    }
     ctx.out.info(`Exported to ${file}`);
     return 0;
   },

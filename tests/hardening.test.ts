@@ -131,6 +131,7 @@ describe("Importer", () => {
       exec: async () => 0,
       owner: async () => undefined,
       stop: async () => {},
+      terminate: async () => {},
       remove: async () => {},
       list: async () => [],
       freeze: async <T>(_name: string, work: () => Promise<T>) => work(),
@@ -159,6 +160,7 @@ describe("Importer with two sandbox homes", () => {
       exec: async () => 0,
       owner: async () => join(otherHome, "x"),
       stop: async () => {},
+      terminate: async () => {},
       remove: async (name: string) => {
         removed.push(name);
       },

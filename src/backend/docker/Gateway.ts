@@ -34,6 +34,7 @@ export class Gateway {
       images: ImageBuilder;
       ports: PortGuard;
       reconciler: Reconciler;
+      dryRun: boolean;
     },
   ) {}
 
@@ -49,7 +50,7 @@ export class Gateway {
   private async create(spec: SandboxSpec, image: string, hash: string): Promise<void> {
     const n = names(spec.name);
     const squidConf = compileSquidConfig(spec.policy);
-    await this.deps.ports.assertFree(spec.ports);
+    if (!this.deps.dryRun) await this.deps.ports.assertFree(spec.ports);
     await this.deps.docker.run(
       gatewayCreateArgs({
         sandbox: spec.name,
@@ -62,7 +63,7 @@ export class Gateway {
     );
     await this.deps.docker.run(["network", "connect", "--alias", "gateway", n.network, n.gateway]);
     await this.deps.docker.run(["start", n.gateway]);
-    await this.assertStaysUp(n.gateway);
+    if (!this.deps.dryRun) await this.assertStaysUp(n.gateway);
   }
 
   private async assertStaysUp(container: string): Promise<void> {

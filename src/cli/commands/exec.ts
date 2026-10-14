@@ -18,6 +18,7 @@ export const routedExecGuard = (values: { env?: readonly string[] }): void => {
 export const execCommand: Command = {
   name: "exec",
   summary: "run one command inside a sandbox",
+  usage: USAGE,
   dryRunnable: true,
   async execute(argv, ctx) {
     const { own, command } = splitDash(argv);

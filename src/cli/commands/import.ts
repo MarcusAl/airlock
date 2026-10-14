@@ -9,7 +9,7 @@ const nextSteps = (name: string): string[] => [
   "",
   "Next:",
   `  airlock install ${name}        # dependencies, registry-only network`,
-  `  airlock run ${name} --port 3000 -- <your dev command>`,
+  `  airlock run ${name} --port <port> -- <your dev command>   # add --net open if it needs the internet`,
   `  airlock claude ${name}         # your Claude Code, commands routed into the box`,
   "",
   "Edit the files in any editor; nothing runs on your machine unless the editor runs it.",
@@ -19,6 +19,7 @@ const nextSteps = (name: string): string[] => [
 export const importCommand: Command = {
   name: "import",
   summary: "clone into a sandbox, scan, quarantine editor/agent config",
+  usage: "airlock import <https-url|path> [--name n]",
   async execute(argv, ctx) {
     const { values, positionals } = parseArgs({
       args: argv,

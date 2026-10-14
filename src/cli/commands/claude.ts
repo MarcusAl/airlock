@@ -20,6 +20,7 @@ const remindHighFindings = (sandbox: Sandbox, ctx: Context): void => {
 export const claudeCommand: Command = {
   name: "claude",
   summary: "start your Claude Code with its commands routed into the sandbox",
+  usage: USAGE,
   async execute(argv, ctx) {
     const { own, command } = splitDash(argv);
     const { values, positionals } = parseArgs({

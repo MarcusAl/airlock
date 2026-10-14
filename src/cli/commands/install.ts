@@ -16,6 +16,7 @@ const closeNetwork = async (sandbox: Sandbox, ctx: Context): Promise<void> => {
 export const installCommand: Command = {
   name: "install",
   summary: "install dependencies with the preset's package manager (registries only)",
+  usage: "airlock install <name>",
   dryRunnable: true,
   async execute(argv, ctx) {
     const { positionals } = parseArgs({ args: argv, allowPositionals: true });

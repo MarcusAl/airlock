@@ -149,6 +149,7 @@ export const execArgs = (request: ExecRequest): string[] =>
     ["--user", USER],
     ["--workdir", containerCwd(request.cwd)],
     ...request.envKeys.map((key) => ["-e", key]),
+    request.id ? ["-e", `AIRLOCK_EXEC_ID=${request.id}`] : [],
     [names(request.name).app, "bash", "-c", request.command],
   );
 
@@ -180,4 +181,18 @@ export const chownVolumeArgs = (volume: string, image: string): string[] =>
     ["--cap-add", "CHOWN"],
     ["--mount", `type=volume,src=${volume},dst=/v`],
     [image, "chown", `${IMAGE_UID}:${IMAGE_UID}`, "/v"],
+  );
+
+const KILL_TAGGED = `for p in /proc/[0-9]*; do
+  if tr '\\0' '\\n' < "$p/environ" 2>/dev/null | grep -qx "AIRLOCK_EXEC_ID=$TARGET"; then
+    kill -TERM "\${p#/proc/}" 2>/dev/null
+  fi
+done`;
+
+export const terminateArgs = (sandbox: string, execId: string): string[] =>
+  argv(
+    ["exec"],
+    ["--user", USER],
+    ["-e", `TARGET=${execId}`],
+    [names(sandbox).app, "sh", "-c", KILL_TAGGED],
   );

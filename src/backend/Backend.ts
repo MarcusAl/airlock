@@ -30,6 +30,7 @@ export interface ExecRequest {
   readonly cwd: string;
   readonly envKeys: readonly string[];
   readonly tty: boolean;
+  readonly id?: string;
 }
 
 export interface SandboxStatus {
@@ -56,6 +57,7 @@ export interface Backend extends Freezer {
   exec(request: ExecRequest): Promise<number>;
   owner(name: string): Promise<string | undefined>;
   stop(name: string): Promise<void>;
+  terminate(name: string, execId: string): Promise<void>;
   remove(name: string): Promise<void>;
   list(): Promise<SandboxStatus[]>;
 }

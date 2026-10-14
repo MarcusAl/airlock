@@ -7,6 +7,7 @@ import { requireName } from "./options.js";
 export const rmCommand: Command = {
   name: "rm",
   summary: "delete a sandbox (refuses if work was never exported or promoted)",
+  usage: "airlock rm <name> [--force]",
   dryRunnable: true,
   async execute(argv, ctx) {
     const { values, positionals } = parseArgs({

@@ -10,6 +10,7 @@ const USAGE = "airlock promote <name> --to <dir> [--force]";
 export const promoteCommand: Command = {
   name: "promote",
   summary: "trust the sandbox: copy it out as a normal git repo",
+  usage: USAGE,
   async execute(argv, ctx) {
     const { values, positionals } = parseArgs({
       args: argv,

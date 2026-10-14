@@ -83,7 +83,7 @@ describe("failure messages", () => {
       ports: [port],
       services: [],
     };
-    const backend = new DockerBackend(new EmptyDocker(), undefined, new PortGuard({ attempts: 1 }));
+    const backend = new DockerBackend(new EmptyDocker(), { ports: new PortGuard({ attempts: 1 }) });
     await expect(backend.up(spec)).rejects.toThrow(new RegExp(`port ${port} is already in use`));
     server.close();
   });
