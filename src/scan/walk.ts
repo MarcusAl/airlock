@@ -14,6 +14,7 @@ export interface RepoFile {
 }
 
 export interface WalkOptions {
+  readonly onVanish?: () => void;
   readonly maxEntries?: number;
   readonly deadlineMs?: number;
   readonly skipNodeModules?: boolean;
@@ -22,6 +23,11 @@ export interface WalkOptions {
 const codeOf = (error: unknown): string | undefined => (error as NodeJS.ErrnoException).code;
 const isGone = (error: unknown): boolean => ["ENOENT", "ENOTDIR"].includes(codeOf(error) ?? "");
 const isLocked = (error: unknown): boolean => ["EACCES", "EPERM"].includes(codeOf(error) ?? "");
+
+const unreadable = (rel: string): AirlockError =>
+  new AirlockError(
+    `a folder in the workspace can't be read (${rel || "."}); airlock won't change permissions on your machine. Fix it inside the box: airlock exec <name> -- chmod -R u+rwx '${rel}'`,
+  );
 
 class Walker {
   private seen = 0;
@@ -47,15 +53,18 @@ class Walker {
   }
 
   private entries(rel: string) {
-    const dir = join(this.root, rel);
     try {
-      return readdirSync(dir, { withFileTypes: true });
+      return readdirSync(join(this.root, rel), { withFileTypes: true });
     } catch (error) {
-      if (isGone(error)) return [];
-      if (!isLocked(error)) throw error;
-      chmodSync(dir, 0o700);
-      return readdirSync(dir, { withFileTypes: true });
+      if (isGone(error)) return this.vanished([]);
+      if (isLocked(error)) throw unreadable(rel);
+      throw error;
     }
+  }
+
+  private vanished<T>(empty: T): T {
+    this.options.onVanish?.();
+    return empty;
   }
 
   private count(): void {
@@ -101,7 +110,7 @@ class Walker {
       }
       return { path: rel, abs, root: this.root, kind: "file", size: stat.size, mode: stat.mode };
     } catch (error) {
-      if (isGone(error)) return undefined;
+      if (isGone(error)) return this.vanished(undefined);
       throw error;
     }
   }

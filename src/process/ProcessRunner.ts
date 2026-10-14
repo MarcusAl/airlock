@@ -24,6 +24,8 @@ export interface ProcessRunner {
   interactive(cmd: string, args: readonly string[], options?: RunOptions): Promise<number>;
 }
 
+const KILL_AFTER_MS = 10_000;
+
 export const formatCommand = (cmd: string, args: readonly string[]): string =>
   quote([cmd, ...args]);
 
@@ -51,7 +53,10 @@ export class ShellRunner implements ProcessRunner {
       env: options.env ?? process.env,
       stdio: "inherit",
     });
-    const forward = (signal: NodeJS.Signals) => child.kill(signal);
+    const forward = (signal: NodeJS.Signals) => {
+      child.kill(signal);
+      setTimeout(() => child.kill("SIGKILL"), KILL_AFTER_MS).unref();
+    };
     const ignore = () => {};
     process.on("SIGINT", ignore);
     process.on("SIGTERM", forward);

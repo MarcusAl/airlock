@@ -73,8 +73,10 @@ const relCwd = (workspace: string, cwd: string): string => {
   return rel.startsWith("..") || isAbsolute(rel) ? "." : rel || ".";
 };
 
+const BRACE_ESCAPE = /\{[^}]*(\/|~|\.\.)[^}]*\}/;
+
 const climbsOut = (pattern: string): boolean =>
-  pattern.startsWith("~") || pattern.split("/").includes("..");
+  pattern.startsWith("~") || pattern.split("/").includes("..") || BRACE_ESCAPE.test(pattern);
 
 const pathOf = (field: string, raw: string, cwd: string): string | undefined => {
   if (field !== "pattern") return resolve(cwd, raw);

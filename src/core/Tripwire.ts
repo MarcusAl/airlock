@@ -11,22 +11,32 @@ interface Cleaner {
   run(paths: SandboxPaths, bucket: string, limits?: WalkOptions): Promise<NeutraliseResult>;
 }
 
-export const TRIPWIRE_LIMITS: WalkOptions = { maxEntries: 200_000, deadlineMs: 20_000 };
+export const TRIPWIRE_LIMITS: WalkOptions = { maxEntries: 200_000, deadlineMs: 15_000 };
+
+export const sweepLock = (paths: SandboxPaths, maxWaitMs?: number): DirLock =>
+  new DirLock(join(paths.dir, ".sweep.lock"), { maxWaitMs });
 
 export class Tripwire {
   private readonly backend: Freezer;
   private readonly neutraliser: Cleaner;
   private readonly limits: WalkOptions;
+  private readonly lockWaitMs: number;
 
-  constructor(deps: { backend: Freezer; neutraliser?: Cleaner; limits?: WalkOptions }) {
+  constructor(deps: {
+    backend: Freezer;
+    neutraliser?: Cleaner;
+    limits?: WalkOptions;
+    lockWaitMs?: number;
+  }) {
     this.backend = deps.backend;
     this.neutraliser = deps.neutraliser ?? new Neutraliser();
     this.limits = deps.limits ?? TRIPWIRE_LIMITS;
+    this.lockWaitMs = deps.lockWaitMs ?? 30_000;
   }
 
   async run(paths: SandboxPaths): Promise<string[]> {
     if (!this.neutraliser.pending(paths, this.limits)) return [];
-    const result = await new DirLock(join(paths.dir, ".sweep.lock")).hold(() =>
+    const result = await sweepLock(paths, this.lockWaitMs).hold(() =>
       this.backend.freeze(paths.name, () =>
         this.neutraliser.run(paths, `tripwire-${Date.now()}`, this.limits),
       ),

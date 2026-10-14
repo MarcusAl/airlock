@@ -24,8 +24,9 @@ export class Neutraliser {
   constructor(private readonly gitFor: (cwd: string) => Git = (cwd) => new Git(cwd)) {}
 
   pending(paths: SandboxPaths, limits: WalkOptions = {}): boolean {
-    const plan = this.plan(paths, limits);
-    return plan.nestedGit.length + plan.links.length + plan.targets.length > 0;
+    let churned = false;
+    const plan = this.plan(paths, { ...limits, onVanish: () => (churned = true) });
+    return churned || plan.nestedGit.length + plan.links.length + plan.targets.length > 0;
   }
 
   async run(

@@ -22,7 +22,10 @@ const denyAll = (message: string) => ({
 
 const output = await (async () => {
   try {
-    const tripwire = new Tripwire({ backend: new DockerBackend(new ShellRunner()) });
+    const tripwire = new Tripwire({
+      backend: new DockerBackend(new ShellRunner()),
+      lockWaitMs: 5_000,
+    });
     const planted = await tripwire.run(SandboxPaths.for(sandbox, root));
     const result = decide(readFileSync(0, "utf8"), { sandbox, workspace, airlock });
     if (planted.length === 0) return result;

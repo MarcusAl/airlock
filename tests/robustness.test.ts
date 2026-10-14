@@ -84,13 +84,6 @@ describe("Tripwire", () => {
 });
 
 describe("Neutraliser", () => {
-  it("recovers an unreadable directory and still quarantines what it hides", async () => {
-    const paths = sandboxWith({ "locked/.vscode/tasks.json": "{}" });
-    chmodSync(join(paths.workspace, "locked"), 0o000);
-    const { moved } = await new Neutraliser().run(paths, "t");
-    expect(moved).toEqual(["locked/.vscode"]);
-  });
-
   it("treats a file another sweep already moved as handled", async () => {
     const paths = sandboxWith({ "CLAUDE.md": "x" });
     const first = new Neutraliser().run(paths, "a");

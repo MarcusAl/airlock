@@ -9,7 +9,7 @@ import { airlockCommand } from "./airlockCommand.js";
 import { boxCommandPrefix, GIT_RULES } from "./route.js";
 
 const MATCHER = "*";
-const HOOK_TIMEOUT_SECONDS = 60;
+const HOOK_TIMEOUT_SECONDS = 120;
 
 const SECRET_PATHS = [
   "~/.ssh/**",

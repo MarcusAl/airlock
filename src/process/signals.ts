@@ -1,11 +1,16 @@
 const SIGNALS = ["SIGINT", "SIGTERM", "SIGHUP"] as const;
+const INTERRUPTED = 130;
 
 export const ignoringSignals = async <T>(work: () => Promise<T>): Promise<T> => {
-  const ignore = () => {};
-  for (const signal of SIGNALS) process.on(signal, ignore);
+  let received = 0;
+  const onSignal = () => {
+    received++;
+    if (received > 1) process.exit(INTERRUPTED);
+  };
+  for (const signal of SIGNALS) process.on(signal, onSignal);
   try {
     return await work();
   } finally {
-    for (const signal of SIGNALS) process.off(signal, ignore);
+    for (const signal of SIGNALS) process.off(signal, onSignal);
   }
 };

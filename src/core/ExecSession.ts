@@ -4,7 +4,7 @@ import type { Reporter } from "./Reporter.js";
 import type { Sandbox } from "./Sandbox.js";
 import type { SandboxLauncher, StateChanges } from "./SandboxLauncher.js";
 import { specFor } from "./specFor.js";
-import { reportPlanted, Tripwire } from "./Tripwire.js";
+import { reportPlanted, sweepLock, Tripwire } from "./Tripwire.js";
 
 export interface ExecOptions {
   readonly cwd?: string;
@@ -34,7 +34,7 @@ export class ExecSession {
   }
 
   async run(sandbox: Sandbox, command: string, options: ExecOptions = {}): Promise<number> {
-    await this.ensureUp(sandbox, options);
+    await sweepLock(sandbox.paths).hold(() => this.ensureUp(sandbox, options));
     try {
       return await this.deps.backend.exec({
         name: sandbox.paths.name,

@@ -160,7 +160,7 @@ Why airlock doesn't attach your editor inside the container: it was built and te
 - **The tripwire is periodic.** A long-running process could plant a file between passes, and something on your machine (a shell prompt, an editor's git panel) could read it in that window.
 - **`allowlist` allows the registries themselves,** which can be used to publish data (`npm publish`, a public bucket).
 - **Nested `node_modules` in monorepos land on your machine.** Only the root `node_modules` lives in a volume. Keep your editor in Restricted Mode.
-- **Hook timeouts.** Claude Code lets a call through if a hook exceeds its timeout (60 seconds). The box could try to cause that by flooding the workspace with files, so the hook's check has its own budget (200,000 entries or 20 seconds) and denies when it runs out. Crashes and errors block.
+- **Hook timeouts.** Claude Code lets a call through if a hook exceeds its timeout (120 seconds). The box could try to cause that by flooding the workspace with files, so the hook's check has its own budget (200,000 entries, 15 seconds per pass, 5 seconds waiting for another cleanup) and denies when it runs out. Even if a call did get through, routed-looking commands can only run in the box: `airlock exec` refuses `--env` for them. Crashes and errors block.
 - **A running box can race your agent's file edits.** The container is paused while the tripwire runs, but between the hook approving an edit and the edit landing, code in the box could swap a folder for a symlink. Stop long-running processes before letting an agent edit, if that matters to you.
 - **Your own Claude Code hooks still run on your machine.** A formatter hook in your user settings (Prettier after every edit, say) would load the repository's config on your machine.
 - **`promote` is a trust decision.** Quarantined files that were committed come back with it, and airlock lists them.
@@ -177,7 +177,8 @@ Why airlock doesn't attach your editor inside the container: it was built and te
 | A download fails inside the box | The network is `none` by default. Use `--net allowlist --allow <host>`, or `--net open`. `docker logs airlock-<name>-gw` shows each request the gateway refused (`TCP_DENIED`) |
 | `the network gateway stopped right after starting` | The message includes the gateway's log. Usually an invalid `--allow` value |
 | Claude says a call was blocked by airlock | Expected for files outside the workspace, unknown tools and git writes other than plain `add`, `commit -m` and `restore`. The message says why |
-| `container is paused` | A cleanup was interrupted. The next airlock command unpauses it, or run `docker unpause airlock-<name>` |
+| `container is paused` | A cleanup was interrupted. The next `run`, `exec`, `install`, `shell` or `claude` unpauses it, or run `docker unpause airlock-<name>` |
+| `a folder in the workspace can't be read` | Something made a folder unreadable. airlock won't change permissions on your machine; fix it in the box with the `airlock exec … chmod` command in the message |
 | Claude says every call is blocked: `too many files in the workspace` | The workspace is too large to check safely (over 200,000 entries). Remove generated files from it or use `airlock exec` directly |
 | `tripwire could not check the workspace` | Something in the workspace couldn't be read. airlock warns but the command already ran; look at what the code created |
 | `sandbox is busy (stale lock?)` | Another airlock command is running for that sandbox; if not, delete the `.lock` folder named in the message |
