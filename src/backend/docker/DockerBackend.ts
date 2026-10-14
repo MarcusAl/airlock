@@ -9,7 +9,7 @@ import { appRunArgs, execArgs, gatewayCreateArgs, serviceRunArgs } from "./args.
 import { explainDockerError } from "./explain.js";
 import { ImageBuilder } from "./ImageBuilder.js";
 import { names } from "./names.js";
-import { assertPortsFree } from "./ports.js";
+import { PortGuard } from "./ports.js";
 
 const hashOf = (value: unknown): string =>
   createHash("sha256").update(JSON.stringify(value)).digest("hex").slice(0, 12);
@@ -32,6 +32,7 @@ export class DockerBackend implements Backend {
   constructor(
     private readonly runner: ProcessRunner,
     private readonly images: ImageBuilder = new ImageBuilder(runner),
+    private readonly ports: PortGuard = new PortGuard(),
   ) {}
 
   async up(spec: SandboxSpec): Promise<void> {
@@ -173,7 +174,7 @@ export class DockerBackend implements Backend {
     const squidConf = compileSquidConfig(spec.policy);
     const n = names(spec.name);
     await this.ensureContainer(n.gateway, gatewayHash(spec), async (hash) => {
-      await assertPortsFree(spec.ports);
+      await this.ports.assertFree(spec.ports);
       await this.docker(
         gatewayCreateArgs({ sandbox: spec.name, image, squidConf, ports: spec.ports, hash }),
       );

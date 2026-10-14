@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { DockerBackend } from "../src/backend/docker/DockerBackend.js";
 import { explainDockerError } from "../src/backend/docker/explain.js";
+import { PortGuard } from "../src/backend/docker/ports.js";
 import { SandboxPaths } from "../src/core/SandboxPaths.js";
 import { StateStore } from "../src/core/StateStore.js";
 import type { CaptureResult, ProcessRunner } from "../src/process/ProcessRunner.js";
@@ -82,9 +83,8 @@ describe("failure messages", () => {
       ports: [port],
       services: [],
     };
-    await expect(new DockerBackend(new EmptyDocker()).up(spec)).rejects.toThrow(
-      new RegExp(`port ${port} is already in use`),
-    );
+    const backend = new DockerBackend(new EmptyDocker(), undefined, new PortGuard({ attempts: 1 }));
+    await expect(backend.up(spec)).rejects.toThrow(new RegExp(`port ${port} is already in use`));
     server.close();
   });
 
@@ -104,5 +104,16 @@ describe("failure messages", () => {
       services: [],
     };
     expect(await new DockerBackend(stale).resume(spec)).toBe(false);
+  });
+
+  it("waits briefly for a port that is being released", async () => {
+    const server = createServer().listen(0, "127.0.0.1");
+    await new Promise((resolve) => server.once("listening", resolve));
+    const address = server.address();
+    const port = typeof address === "object" && address ? address.port : 0;
+    setTimeout(() => server.close(), 100);
+    await expect(new PortGuard({ attempts: 20, delayMs: 50 }).assertFree([port])).resolves.toBe(
+      undefined,
+    );
   });
 });
