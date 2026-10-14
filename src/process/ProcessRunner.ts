@@ -26,24 +26,35 @@ export interface ProcessRunner {
 
 const KILL_AFTER_MS = 10_000;
 
+const ignoreClosedPipe = (error: NodeJS.ErrnoException): void => {
+  if (error.code !== "EPIPE") throw error;
+};
+
 export const formatCommand = (cmd: string, args: readonly string[]): string =>
   quote([cmd, ...args]);
 
 export class ShellRunner implements ProcessRunner {
   capture(cmd: string, args: readonly string[], options: RunOptions = {}): Promise<CaptureResult> {
     return new Promise((resolve, reject) => {
-      const child = spawn(cmd, args, { cwd: options.cwd, env: options.env ?? process.env });
+      const child = spawn(cmd, args, {
+        cwd: options.cwd,
+        env: options.env ?? process.env,
+        stdio: [options.input === undefined ? "ignore" : "pipe", "pipe", "pipe"],
+      });
       let stdout = "";
       let stderr = "";
-      child.stdout.on("data", (chunk) => {
+      child.stdout?.on("data", (chunk) => {
         stdout += chunk;
       });
-      child.stderr.on("data", (chunk) => {
+      child.stderr?.on("data", (chunk) => {
         stderr += chunk;
       });
       child.on("error", (error) => reject(missingProgram(cmd)(error)));
       child.on("close", (code) => resolve({ code: code ?? 1, stdout, stderr }));
-      child.stdin.end(options.input ?? "");
+      if (options.input !== undefined && child.stdin) {
+        child.stdin.on("error", ignoreClosedPipe);
+        child.stdin.end(options.input);
+      }
     });
   }
 
