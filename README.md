@@ -222,6 +222,10 @@ docker image ls 'airlock-*'      # cached images; remove with docker image rm
 
 airlock's difference: your agent stays on your machine with its normal sign-in while every command it runs is routed into the sandbox, and the same tool runs ordinary apps with ports and egress policy.
 
+## Releasing
+
+Only the maintainer can publish. Publishing happens when a GitHub Release is created for a tag matching the `package.json` version (for example `v0.2.0`). The release workflow waits for the maintainer's approval in the protected `npm` environment, then publishes with npm trusted publishing and provenance, so no npm token is stored in the repository.
+
 ## Development
 
 ```bash
