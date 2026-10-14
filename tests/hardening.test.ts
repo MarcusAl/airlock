@@ -111,7 +111,7 @@ describe("Tripwire", () => {
       pending: () => true,
       run: async () => {
         events.push("clean");
-        return { moved: [], removedLinks: [], removedGit: [] };
+        return { moved: [], removedLinks: [], removedGit: [], unreadable: [] };
       },
     };
     const paths = SandboxPaths.for("demo", mkdtempSync(join(tmpdir(), "airlock-home-")));

@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import { chmodSync, mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -56,11 +56,32 @@ describe("DirLock", () => {
 });
 
 describe("unreadable directories", () => {
-  it("are reported instead of being changed on the host", () => {
-    const paths = sandboxWith({ "locked/.vscode/tasks.json": "{}" });
+  it("are reported and skipped, and the rest of the sweep still runs", async () => {
+    const paths = sandboxWith({ "locked/.vscode/tasks.json": "{}", ".envrc": "evil" });
     chmodSync(join(paths.workspace, "locked"), 0o000);
-    expect(() => new Neutraliser().pending(paths)).toThrow(/can't be read.*chmod/s);
+    const { moved, unreadable } = await new Neutraliser().run(paths, "t");
     chmodSync(join(paths.workspace, "locked"), 0o700);
+    expect({ moved, unreadable }).toEqual({ moved: [".envrc"], unreadable: ["locked"] });
+  });
+});
+
+describe("DirLock ownership", () => {
+  it("does not release a lock another process now holds", async () => {
+    const lock = join(mkdtempSync(join(tmpdir(), "airlock-lock-")), ".lock");
+    await new DirLock(lock).hold(async () => {
+      writeFileSync(join(lock, "pid"), "424242");
+    });
+    expect(existsSync(lock)).toBe(true);
+  });
+});
+
+describe("hook approval", () => {
+  it("approves the commands it rewrites, so no standing allow rule is needed", () => {
+    const raw = JSON.stringify({ tool_name: "Bash", tool_input: { command: "ls" }, cwd: "/ws" });
+    const output = JSON.stringify(
+      decide(raw, { sandbox: "demo", workspace: "/ws", airlock: ["n"] }, (p) => p),
+    );
+    expect(output).toContain('"permissionDecision":"allow"');
   });
 });
 

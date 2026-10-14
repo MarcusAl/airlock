@@ -34,7 +34,7 @@ export class ExecSession {
   }
 
   async run(sandbox: Sandbox, command: string, options: ExecOptions = {}): Promise<number> {
-    await sweepLock(sandbox.paths).hold(() => this.ensureUp(sandbox, options));
+    await this.ensureUp(sandbox, options);
     try {
       return await this.deps.backend.exec({
         name: sandbox.paths.name,
@@ -50,12 +50,17 @@ export class ExecSession {
 
   private async ensureUp(sandbox: Sandbox, options: ExecOptions): Promise<void> {
     const fast = !hasChanges(options.changes) && !options.refresh;
-    const spec = specFor(sandbox.store.load(), sandbox.paths);
-    if (fast && (await this.deps.backend.resume(spec))) return;
+    if (fast && (await this.resume(sandbox))) return;
     await this.deps.launcher.start(sandbox, options.changes, {
       persist: options.persist,
       refresh: options.refresh,
     });
+    await this.resume(sandbox);
+  }
+
+  private resume(sandbox: Sandbox): Promise<boolean> {
+    const spec = specFor(sandbox.store.load(), sandbox.paths);
+    return sweepLock(sandbox.paths).hold(() => this.deps.backend.resume(spec));
   }
 
   private async sweep(sandbox: Sandbox): Promise<void> {

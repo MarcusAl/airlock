@@ -1,5 +1,5 @@
-import { chmodSync, lstatSync, readdirSync, readlinkSync, realpathSync } from "node:fs";
-import { join } from "node:path";
+import { lstatSync, readdirSync, readlinkSync, realpathSync } from "node:fs";
+import { dirname, join } from "node:path";
 import { AirlockError } from "../errors.js";
 import { isInside } from "../paths.js";
 
@@ -7,7 +7,7 @@ export interface RepoFile {
   readonly path: string;
   readonly abs: string;
   readonly root: string;
-  readonly kind: "file" | "symlink" | "nested-git";
+  readonly kind: "file" | "symlink" | "nested-git" | "unreadable";
   readonly size: number;
   readonly mode: number;
   readonly linkTarget?: string;
@@ -24,11 +24,6 @@ const codeOf = (error: unknown): string | undefined => (error as NodeJS.ErrnoExc
 const isGone = (error: unknown): boolean => ["ENOENT", "ENOTDIR"].includes(codeOf(error) ?? "");
 const isLocked = (error: unknown): boolean => ["EACCES", "EPERM"].includes(codeOf(error) ?? "");
 
-const unreadable = (rel: string): AirlockError =>
-  new AirlockError(
-    `a folder in the workspace can't be read (${rel || "."}); airlock won't change permissions on your machine. Fix it inside the box: airlock exec <name> -- chmod -R u+rwx '${rel}'`,
-  );
-
 class Walker {
   private seen = 0;
   private readonly deadline: number;
@@ -41,7 +36,9 @@ class Walker {
   }
 
   walk(rel: string): RepoFile[] {
-    return this.entries(rel).flatMap((entry) => {
+    const entries = this.entries(rel);
+    if (entries === undefined) return [this.unreadable(rel)];
+    return entries.flatMap((entry) => {
       this.count();
       const path = rel ? `${rel}/${entry.name}` : entry.name;
       if (entry.name === ".git") return rel ? [this.nestedGit(path)] : [];
@@ -57,7 +54,7 @@ class Walker {
       return readdirSync(join(this.root, rel), { withFileTypes: true });
     } catch (error) {
       if (isGone(error)) return this.vanished([]);
-      if (isLocked(error)) throw unreadable(rel);
+      if (isLocked(error) && rel) return undefined;
       throw error;
     }
   }
@@ -79,6 +76,17 @@ class Walker {
 
   private skips(name: string): boolean {
     return name === "node_modules" && this.options.skipNodeModules === true;
+  }
+
+  private unreadable(path: string): RepoFile {
+    return {
+      path,
+      abs: join(this.root, path),
+      root: this.root,
+      kind: "unreadable",
+      size: 0,
+      mode: 0,
+    };
   }
 
   private nestedGit(path: string): RepoFile {
@@ -111,6 +119,7 @@ class Walker {
       return { path: rel, abs, root: this.root, kind: "file", size: stat.size, mode: stat.mode };
     } catch (error) {
       if (isGone(error)) return this.vanished(undefined);
+      if (isLocked(error)) return this.unreadable(dirname(rel) === "." ? rel : dirname(rel));
       throw error;
     }
   }

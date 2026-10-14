@@ -10,12 +10,14 @@ export interface NeutraliseResult {
   readonly moved: string[];
   readonly removedLinks: string[];
   readonly removedGit: string[];
+  readonly unreadable: string[];
 }
 
 interface Plan {
   readonly nestedGit: RepoFile[];
   readonly links: RepoFile[];
   readonly targets: string[];
+  readonly unreadable: string[];
 }
 
 const isGone = (error: unknown): boolean => (error as NodeJS.ErrnoException).code === "ENOENT";
@@ -26,7 +28,8 @@ export class Neutraliser {
   pending(paths: SandboxPaths, limits: WalkOptions = {}): boolean {
     let churned = false;
     const plan = this.plan(paths, { ...limits, onVanish: () => (churned = true) });
-    return churned || plan.nestedGit.length + plan.links.length + plan.targets.length > 0;
+    const work = plan.nestedGit.length + plan.links.length + plan.targets.length;
+    return churned || work + plan.unreadable.length > 0;
   }
 
   async run(
@@ -39,7 +42,7 @@ export class Neutraliser {
     const removedLinks = this.remove(plan.links);
     await this.skipWorktree(paths.workspace, plan.targets);
     const moved = plan.targets.filter((rel) => this.move(paths, bucket, rel));
-    return { moved, removedLinks, removedGit };
+    return { moved, removedLinks, removedGit, unreadable: plan.unreadable };
   }
 
   private plan(paths: SandboxPaths, limits: WalkOptions): Plan {
@@ -47,11 +50,10 @@ export class Neutraliser {
     const nestedGit = files.filter((f) => f.kind === "nested-git");
     const links = files.filter(escapesRoot);
     const gone = new Set([...nestedGit, ...links].map((f) => f.path));
-    return {
-      nestedGit,
-      links,
-      targets: this.targets(files.map((f) => f.path).filter((p) => !gone.has(p))),
-    };
+    const locked = [...new Set(files.filter((f) => f.kind === "unreadable").map((f) => f.path))];
+    const within = (p: string) => locked.some((dir) => p === dir || p.startsWith(`${dir}/`));
+    const readable = files.map((f) => f.path).filter((p) => !gone.has(p) && !within(p));
+    return { nestedGit, links, targets: this.targets(readable), unreadable: locked };
   }
 
   private remove(files: readonly RepoFile[]): string[] {

@@ -41,12 +41,17 @@ export class Tripwire {
         this.neutraliser.run(paths, `tripwire-${Date.now()}`, this.limits),
       ),
     );
-    return [...result.moved, ...result.removedLinks, ...result.removedGit];
+    return [
+      ...result.moved,
+      ...result.removedLinks,
+      ...result.removedGit,
+      ...result.unreadable.map((dir) => `${dir} (unreadable, so not checked)`),
+    ];
   }
 }
 
 export const reportPlanted = (reporter: Reporter, planted: readonly string[]): void => {
   for (const path of planted) {
-    reporter.warn(`tripwire: found ${path} in the workspace; removed or quarantined`);
+    reporter.warn(`tripwire: ${path} in the workspace; removed, quarantined or flagged`);
   }
 };

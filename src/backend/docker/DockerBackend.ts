@@ -42,7 +42,6 @@ export class DockerBackend implements Backend {
       { dockerfile: spec.image.dockerfile },
       spec.image.refresh,
     );
-    await this.unpauseIfPaused([names(spec.name).app]);
     await this.ensureNetwork(spec.name);
     for (const service of spec.services) {
       await this.ensureContainer(names(spec.name).service(service), hashOf(service), (hash) =>

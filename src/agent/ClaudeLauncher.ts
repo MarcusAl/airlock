@@ -5,8 +5,7 @@ import type { Sandbox } from "../core/Sandbox.js";
 import type { SandboxLauncher } from "../core/SandboxLauncher.js";
 import type { SandboxPaths } from "../core/SandboxPaths.js";
 import type { ProcessRunner } from "../process/ProcessRunner.js";
-import { airlockCommand } from "./airlockCommand.js";
-import { boxCommandPrefix, GIT_RULES } from "./route.js";
+import { GIT_RULES } from "./route.js";
 
 const MATCHER = "*";
 const HOOK_TIMEOUT_SECONDS = 120;
@@ -66,14 +65,6 @@ export class ClaudeLauncher {
     return `${node} || { echo 'airlock hook failed; blocking' >&2; exit 2; }`;
   }
 
-  private routedPrefix(paths: SandboxPaths): string {
-    return boxCommandPrefix({
-      sandbox: paths.name,
-      relCwd: ".",
-      airlock: airlockCommand(paths.workspace),
-    });
-  }
-
   private writeSettings(paths: SandboxPaths): void {
     const gitDir = `/${paths.workspace}/.git/**`;
     const settings = {
@@ -88,7 +79,6 @@ export class ClaudeLauncher {
         ],
       },
       permissions: {
-        allow: [`Bash(${this.routedPrefix(paths)}:*)`],
         // Kept alongside the hook: these still apply if a hook call times out.
         deny: [
           ...SECRET_PATHS.flatMap((p) => [`Read(${p})`, `Edit(${p})`]),

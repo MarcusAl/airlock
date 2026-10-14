@@ -2,10 +2,8 @@ import { execFileSync } from "node:child_process";
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { parse } from "shell-quote";
 import { describe, expect, it } from "vitest";
 import { decide } from "../src/agent/decide.js";
-import { boxCommandPrefix } from "../src/agent/route.js";
 import { DockerBackend } from "../src/backend/docker/DockerBackend.js";
 import { SandboxPaths } from "../src/core/SandboxPaths.js";
 import { Tripwire } from "../src/core/Tripwire.js";
@@ -57,13 +55,6 @@ describe("hook policy gaps", () => {
   it.each(["Agent", "Task"])("denies %s with isolation, which runs outside the box", (tool) => {
     const input = { tool_name: tool, tool_input: { isolation: "worktree" }, cwd: "/ws" };
     expect(decisionOf(input)).toBe("deny");
-  });
-});
-
-describe("routed command permissions", () => {
-  it("pre-approves exactly the prefix the hook rewrites commands to", () => {
-    const prefix = boxCommandPrefix({ sandbox: "demo", relCwd: ".", airlock: ["/n", "/c.js"] });
-    expect(parse(prefix)).toEqual(["/n", "/c.js", "exec", "demo"]);
   });
 });
 

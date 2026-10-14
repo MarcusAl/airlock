@@ -58,8 +58,16 @@ const decision = (permissionDecision: "deny" | "ask", reason: string): HookOutpu
 
 const deny = (reason: string): HookOutput => decision("deny", reason);
 
-const rewrite = (toolInput: Record<string, unknown>, command: string): HookOutput => ({
-  hookSpecificOutput: { hookEventName: "PreToolUse", updatedInput: { ...toolInput, command } },
+const rewrite = (
+  toolInput: Record<string, unknown>,
+  command: string,
+  approve: boolean,
+): HookOutput => ({
+  hookSpecificOutput: {
+    hookEventName: "PreToolUse",
+    ...(approve ? { permissionDecision: "allow" } : {}),
+    updatedInput: { ...toolInput, command },
+  },
 });
 
 const nativeReal = (path: string): string => {
@@ -132,7 +140,8 @@ const toolDecision = (
     relCwd: relCwd(ctx.workspace, cwd),
     airlock: ctx.airlock,
   });
-  return routed.kind === "deny" ? deny(routed.reason) : rewrite(toolInput, routed.command);
+  if (routed.kind === "deny") return deny(routed.reason);
+  return rewrite(toolInput, routed.command, routed.kind === "box");
 };
 
 export const decide = (

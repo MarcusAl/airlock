@@ -123,7 +123,16 @@ const nestedGit: Rule = {
       : [],
 };
 
+const unreadableFolder: Rule = {
+  id: "unreadable-folder",
+  check: (file) =>
+    file.kind === "unreadable"
+      ? finding("unreadable-folder", "medium", file, "folder can't be read, so it can't be checked")
+      : [],
+};
+
 export const DEFAULT_RULES: readonly Rule[] = [
+  unreadableFolder,
   lifecycleScripts,
   editorAgentConfig,
   configExecutesCode,

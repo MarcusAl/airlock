@@ -1,4 +1,4 @@
-import { mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
 import { AirlockError } from "../errors.js";
@@ -7,6 +7,7 @@ const DELAY_MS = 100;
 const FRESH_MS = 2_000;
 
 const isAlive = (pid: number): boolean => {
+  if (!Number.isInteger(pid) || pid <= 0) return false;
   try {
     process.kill(pid, 0);
     return true;
@@ -30,9 +31,7 @@ export class DirLock {
     try {
       return await work();
     } finally {
-      try {
-        rmSync(this.path, { recursive: true, force: true });
-      } catch {}
+      this.release();
     }
   }
 
@@ -40,11 +39,13 @@ export class DirLock {
     const deadline = Date.now() + this.maxWaitMs;
     while (!this.tryTake()) {
       if (this.isStale()) {
-        rmSync(this.path, { recursive: true, force: true });
+        this.breakStale();
         continue;
       }
       if (Date.now() > deadline) {
-        throw new AirlockError(`sandbox is busy (stale lock? remove ${this.path})`);
+        throw new AirlockError(
+          "sandbox is busy: another airlock command is starting or checking it; try again shortly",
+        );
       }
       await sleep(DELAY_MS);
     }
@@ -57,16 +58,45 @@ export class DirLock {
       if ((error as NodeJS.ErrnoException).code === "EEXIST") return false;
       throw error;
     }
-    writeFileSync(join(this.path, "pid"), String(process.pid));
+    const temp = join(this.path, `pid.${process.pid}`);
+    writeFileSync(temp, String(process.pid));
+    renameSync(temp, join(this.path, "pid"));
     return true;
   }
 
-  private isStale(): boolean {
+  private holder(path = this.path): number | undefined {
     try {
-      return !isAlive(Number(readFileSync(join(this.path, "pid"), "utf8")));
+      return Number(readFileSync(join(path, "pid"), "utf8"));
     } catch {
-      return this.olderThan(FRESH_MS);
+      return undefined;
     }
+  }
+
+  private isStale(): boolean {
+    const pid = this.holder();
+    return pid === undefined ? this.olderThan(FRESH_MS) : !isAlive(pid);
+  }
+
+  private breakStale(): void {
+    const aside = `${this.path}.stale-${process.pid}-${Date.now()}`;
+    try {
+      renameSync(this.path, aside);
+    } catch {
+      return;
+    }
+    const pid = this.holder(aside);
+    if (pid !== undefined && isAlive(pid)) {
+      renameSync(aside, this.path);
+      return;
+    }
+    rmSync(aside, { recursive: true, force: true });
+  }
+
+  private release(): void {
+    if (this.holder() !== process.pid) return;
+    try {
+      rmSync(this.path, { recursive: true, force: true });
+    } catch {}
   }
 
   private olderThan(ms: number): boolean {
