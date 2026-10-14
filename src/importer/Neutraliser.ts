@@ -3,7 +3,7 @@ import { dirname, join } from "node:path";
 import type { SandboxPaths } from "../core/SandboxPaths.js";
 import { AirlockError } from "../errors.js";
 import { Git } from "../process/Git.js";
-import { escapesRoot, isInside, type RepoFile, walk } from "../scan/walk.js";
+import { escapesRoot, isInside, type RepoFile, type WalkOptions, walk } from "../scan/walk.js";
 import { isQuarantined, quarantineDir } from "./quarantine.js";
 
 export interface NeutraliseResult {
@@ -15,8 +15,12 @@ export interface NeutraliseResult {
 export class Neutraliser {
   constructor(private readonly gitFor: (cwd: string) => Git = (cwd) => new Git(cwd)) {}
 
-  async run(paths: SandboxPaths, bucket: string): Promise<NeutraliseResult> {
-    const files = walk(paths.workspace);
+  async run(
+    paths: SandboxPaths,
+    bucket: string,
+    limits: WalkOptions = {},
+  ): Promise<NeutraliseResult> {
+    const files = walk(paths.workspace, limits);
     const removedGit = this.remove(files.filter((f) => f.kind === "nested-git"));
     const removedLinks = this.remove(files.filter(escapesRoot));
     const gone = new Set([...removedGit, ...removedLinks]);

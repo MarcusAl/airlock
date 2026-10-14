@@ -1,9 +1,9 @@
 import type { Backend } from "../backend/Backend.js";
-import { Neutraliser } from "../importer/Neutraliser.js";
 import type { Reporter } from "./Reporter.js";
 import type { Sandbox } from "./Sandbox.js";
 import type { SandboxLauncher, StateChanges } from "./SandboxLauncher.js";
 import { specFor } from "./specFor.js";
+import { Tripwire, tripwireMessage } from "./Tripwire.js";
 
 export interface ExecOptions {
   readonly cwd?: string;
@@ -18,7 +18,7 @@ const hasChanges = (changes: StateChanges | undefined): boolean =>
   changes !== undefined && Object.values(changes).some((value) => value !== undefined);
 
 export class ExecSession {
-  private readonly neutraliser: Neutraliser;
+  private readonly tripwire: Tripwire;
 
   constructor(
     private readonly deps: {
@@ -26,23 +26,25 @@ export class ExecSession {
       backend: Backend;
       reporter: Reporter;
       dryRun?: boolean;
-      neutraliser?: Neutraliser;
+      tripwire?: Tripwire;
     },
   ) {
-    this.neutraliser = deps.neutraliser ?? new Neutraliser();
+    this.tripwire = deps.tripwire ?? new Tripwire({ backend: deps.backend });
   }
 
   async run(sandbox: Sandbox, command: string, options: ExecOptions = {}): Promise<number> {
     await this.ensureUp(sandbox, options);
-    const code = await this.deps.backend.exec({
-      name: sandbox.paths.name,
-      command,
-      cwd: options.cwd ?? ".",
-      envKeys: options.envKeys ?? [],
-      tty: options.tty ?? false,
-    });
-    await this.tripwire(sandbox);
-    return code;
+    try {
+      return await this.deps.backend.exec({
+        name: sandbox.paths.name,
+        command,
+        cwd: options.cwd ?? ".",
+        envKeys: options.envKeys ?? [],
+        tty: options.tty ?? false,
+      });
+    } finally {
+      await this.sweep(sandbox);
+    }
   }
 
   private async ensureUp(sandbox: Sandbox, options: ExecOptions): Promise<void> {
@@ -55,12 +57,16 @@ export class ExecSession {
     });
   }
 
-  private async tripwire(sandbox: Sandbox): Promise<void> {
+  private async sweep(sandbox: Sandbox): Promise<void> {
     if (this.deps.dryRun) return;
-    const bucket = `tripwire-${Date.now()}`;
-    const { moved, removedLinks, removedGit } = await this.neutraliser.run(sandbox.paths, bucket);
-    for (const path of [...moved, ...removedLinks, ...removedGit]) {
-      this.deps.reporter.warn(`tripwire: found ${path} in the workspace; removed or quarantined`);
+    try {
+      for (const path of await this.tripwire.run(sandbox.paths)) {
+        this.deps.reporter.warn(tripwireMessage(path));
+      }
+    } catch (error) {
+      this.deps.reporter.warn(
+        `tripwire could not check the workspace: ${(error as Error).message}`,
+      );
     }
   }
 }

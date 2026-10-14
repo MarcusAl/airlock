@@ -46,7 +46,9 @@ export class ShellRunner implements ProcessRunner {
   }
 
   interactive(cmd: string, args: readonly string[], options: RunOptions = {}): Promise<number> {
-    return new Promise((resolve, reject) => {
+    const ignore = () => {};
+    process.on("SIGINT", ignore);
+    return new Promise<number>((resolve, reject) => {
       const child = spawn(cmd, args, {
         cwd: options.cwd,
         env: options.env ?? process.env,
@@ -54,7 +56,7 @@ export class ShellRunner implements ProcessRunner {
       });
       child.on("error", (error) => reject(missingProgram(cmd)(error)));
       child.on("close", (code) => resolve(code ?? 1));
-    });
+    }).finally(() => process.off("SIGINT", ignore));
   }
 }
 

@@ -1,4 +1,5 @@
 import { parseArgs } from "node:util";
+import { DockerCloner } from "../../backend/docker/DockerCloner.js";
 import { AirlockError } from "../../errors.js";
 import { defaultName, Importer } from "../../importer/Importer.js";
 import { formatReport } from "../../scan/Scanner.js";
@@ -27,10 +28,11 @@ export const importCommand: Command = {
     const source = positionals[0];
     if (!source) throw new AirlockError("usage: airlock import <https-url|path> [--name n]");
     const name = values.name ?? defaultName(source);
-    const result = await new Importer({ runner: ctx.runner, backend: ctx.backend }).import(
-      source,
-      name,
-    );
+    const result = await new Importer({
+      runner: ctx.runner,
+      backend: ctx.backend,
+      cloner: new DockerCloner(ctx.runner),
+    }).import(source, name);
     for (const warning of result.warnings) ctx.out.warn(warning);
     ctx.out.info(`Imported ${name} (${result.state.preset} ${result.state.version}).`);
     ctx.out.info(formatReport(result.findings));

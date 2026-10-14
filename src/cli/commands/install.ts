@@ -16,12 +16,14 @@ export const installCommand: Command = {
     const files = new Set(readdirSync(sandbox.paths.workspace));
     const command = PRESETS[state.preset].installCommand(files);
     const closed = state.net === "none";
-    const code = await ctx.session.run(sandbox, command, {
-      changes: closed ? { net: "allowlist" } : {},
-      persist: !closed,
-      tty: isInteractive(),
-    });
-    if (closed) await ctx.launcher.start(sandbox);
-    return code;
+    try {
+      return await ctx.session.run(sandbox, command, {
+        changes: closed ? { net: "allowlist" } : {},
+        persist: !closed,
+        tty: isInteractive(),
+      });
+    } finally {
+      if (closed) await ctx.launcher.start(sandbox);
+    }
   },
 };

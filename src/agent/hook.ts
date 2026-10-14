@@ -2,9 +2,13 @@
 import { readFileSync } from "node:fs";
 import { dirname } from "node:path";
 import { fileURLToPath } from "node:url";
+import { DockerBackend } from "../backend/docker/DockerBackend.js";
 import { SandboxPaths } from "../core/SandboxPaths.js";
-import { Neutraliser } from "../importer/Neutraliser.js";
+import { Tripwire } from "../core/Tripwire.js";
+import { ShellRunner } from "../process/ProcessRunner.js";
 import { decide } from "./decide.js";
+
+const HOOK_BUDGET = { maxEntries: 200_000, deadlineMs: 20_000 };
 
 const [sandbox = "", workspace = ""] = process.argv.slice(2);
 const root = dirname(dirname(workspace));
@@ -21,15 +25,14 @@ const denyAll = (message: string) => ({
 
 const output = await (async () => {
   try {
-    const { moved, removedLinks, removedGit } = await new Neutraliser().run(
-      SandboxPaths.for(sandbox, root),
-      `tripwire-${Date.now()}`,
-    );
-    const planted = [...moved, ...removedLinks, ...removedGit];
+    const tripwire = new Tripwire({
+      backend: new DockerBackend(new ShellRunner()),
+      limits: HOOK_BUDGET,
+    });
+    const planted = await tripwire.run(SandboxPaths.for(sandbox, root));
     const result = decide(readFileSync(0, "utf8"), { sandbox, workspace, airlock });
-    return planted.length
-      ? { ...result, systemMessage: `airlock tripwire quarantined: ${planted.join(", ")}` }
-      : result;
+    if (planted.length === 0) return result;
+    return { ...result, systemMessage: `airlock tripwire quarantined: ${planted.join(", ")}` };
   } catch (error) {
     return denyAll((error as Error).message);
   }

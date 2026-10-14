@@ -5,7 +5,7 @@ export class Scanner {
   constructor(private readonly rules: readonly Rule[] = DEFAULT_RULES) {}
 
   scan(root: string): Finding[] {
-    return walk(root)
+    return walk(root, { skipNodeModules: true })
       .flatMap((file) => this.rules.flatMap((rule) => rule.check(file)))
       .sort((a, b) => a.path.localeCompare(b.path));
   }

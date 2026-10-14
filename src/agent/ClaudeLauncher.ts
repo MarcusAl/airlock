@@ -7,7 +7,7 @@ import type { SandboxPaths } from "../core/SandboxPaths.js";
 import type { ProcessRunner } from "../process/ProcessRunner.js";
 import { GIT_RULES } from "./route.js";
 
-const MATCHER = "Bash|Read|Edit|Write|Grep|Glob|NotebookEdit";
+const MATCHER = "*";
 const HOOK_TIMEOUT_SECONDS = 60;
 
 const SECRET_PATHS = [

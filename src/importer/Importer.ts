@@ -1,18 +1,16 @@
-import { cpSync, existsSync, mkdirSync, readdirSync } from "node:fs";
+import { cpSync, existsSync, mkdirSync, readdirSync, rmSync } from "node:fs";
 import { basename, resolve } from "node:path";
-import type { Backend } from "../backend/Backend.js";
+import type { Backend, Cloner } from "../backend/Backend.js";
 import { SandboxPaths } from "../core/SandboxPaths.js";
 import { type SandboxState, StateStore } from "../core/StateStore.js";
 import { AirlockError } from "../errors.js";
 import { type Detected, detectPreset } from "../presets/detect.js";
-import { IMAGE_UID } from "../presets/dockerfile.js";
 import { Git } from "../process/Git.js";
 import type { ProcessRunner } from "../process/ProcessRunner.js";
 import type { Finding } from "../scan/rules.js";
 import { Scanner } from "../scan/Scanner.js";
 import { Neutraliser } from "./Neutraliser.js";
 
-const CLONE_IMAGE = "alpine/git:2.54.0";
 const HTTPS_URL = /^https:\/\//;
 const FALLBACK: Detected = { preset: "node", version: "24" };
 
@@ -36,15 +34,18 @@ export class Importer {
   private readonly neutraliser: Neutraliser;
 
   private readonly backend: Backend;
+  private readonly cloner: Cloner;
 
   constructor(deps: {
     runner: ProcessRunner;
     backend: Backend;
+    cloner: Cloner;
     scanner?: Scanner;
     neutraliser?: Neutraliser;
   }) {
     this.runner = deps.runner;
     this.backend = deps.backend;
+    this.cloner = deps.cloner;
     this.scanner = deps.scanner ?? new Scanner();
     this.neutraliser = deps.neutraliser ?? new Neutraliser();
   }
@@ -54,6 +55,15 @@ export class Importer {
     if (existsSync(paths.dir)) throw new AirlockError(`sandbox "${name}" already exists`);
     await this.backend.remove(name);
     mkdirSync(paths.workspace, { recursive: true });
+    try {
+      return await this.prepare(source, name, paths);
+    } catch (error) {
+      rmSync(paths.dir, { recursive: true, force: true });
+      throw error;
+    }
+  }
+
+  private async prepare(source: string, name: string, paths: SandboxPaths): Promise<ImportResult> {
     await this.fetch(source, paths);
     const git = new Git(paths.workspace, this.runner);
     await git.run(["config", "core.hooksPath", "/dev/null"]);
@@ -67,61 +77,15 @@ export class Importer {
   }
 
   private async fetch(source: string, paths: SandboxPaths): Promise<void> {
-    if (HTTPS_URL.test(source)) return this.cloneInContainer(source, paths);
+    if (HTTPS_URL.test(source)) return this.cloner.clone({ url: source }, paths.workspace);
     const local = resolve(source);
     if (!existsSync(local)) {
       throw new AirlockError(`not an https URL or an existing path: ${source}`);
     }
-    if (existsSync(`${local}/.git`)) return this.cloneInContainer("/src", paths, local);
-    return this.copyPlainDirectory(local, paths);
-  }
-
-  private async cloneInContainer(
-    url: string,
-    paths: SandboxPaths,
-    localSource?: string,
-  ): Promise<void> {
-    const sourceMount = localSource
-      ? ["--mount", `type=bind,src=${localSource},dst=/src,readonly`]
-      : [];
-    const result = await this.runner.capture("docker", [
-      "run",
-      "--rm",
-      "--network",
-      "bridge",
-      "--cap-drop",
-      "ALL",
-      "--security-opt",
-      "no-new-privileges",
-      "--read-only",
-      "--tmpfs",
-      "/tmp",
-      "--pids-limit",
-      "256",
-      "--memory",
-      "1g",
-      "--user",
-      `${IMAGE_UID}:${IMAGE_UID}`,
-      "-e",
-      "HOME=/tmp",
-      "--mount",
-      `type=bind,src=${paths.workspace},dst=/out`,
-      ...sourceMount,
-      CLONE_IMAGE,
-      "-c",
-      "safe.directory=*",
-      "clone",
-      "--no-recurse-submodules",
-      "--template=",
-      "--",
-      url,
-      "/out",
-    ]);
-    if (result.code !== 0) {
-      throw new AirlockError(
-        `clone failed: ${result.stderr.trim()}\nPrivate repo? Clone it yourself, then run: airlock import <path>`,
-      );
+    if (existsSync(`${local}/.git`)) {
+      return this.cloner.clone({ url: "/src", localPath: local }, paths.workspace);
     }
+    return this.copyPlainDirectory(local, paths);
   }
 
   private async copyPlainDirectory(local: string, paths: SandboxPaths): Promise<void> {

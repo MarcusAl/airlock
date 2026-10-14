@@ -69,6 +69,16 @@ export class DockerBackend implements Backend {
     return (await this.runner.capture("docker", ["start", n.app, n.gateway])).code === 0;
   }
 
+  async freeze<T>(name: string, work: () => Promise<T>): Promise<T> {
+    const app = names(name).app;
+    const paused = (await this.runner.capture("docker", ["pause", app])).code === 0;
+    try {
+      return await work();
+    } finally {
+      if (paused) await this.runner.capture("docker", ["unpause", app]);
+    }
+  }
+
   exec(request: ExecRequest): Promise<number> {
     return this.runner.interactive("docker", execArgs(request));
   }

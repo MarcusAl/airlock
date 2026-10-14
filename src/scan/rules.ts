@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { closeSync, openSync, readFileSync, readSync } from "node:fs";
 import { posix } from "node:path";
 import { isQuarantined } from "../importer/quarantine.js";
 import { escapesRoot, type RepoFile } from "./walk.js";
@@ -27,6 +27,17 @@ const EXECUTES =
 const BLOB = /[A-Za-z0-9+/]{400,}={0,2}/;
 const NATIVE_EXT = /\.(node|so|dylib|dll|exe)$/;
 const MAGIC = ["7f454c46", "cffaedfe", "cefaedfe", "cafebabe", "4d5a"];
+
+const firstBytes = (path: string, count: number): string => {
+  const fd = openSync(path, "r");
+  try {
+    const buffer = Buffer.alloc(count);
+    const read = readSync(fd, buffer, 0, count, 0);
+    return buffer.subarray(0, read).toString("hex");
+  } finally {
+    closeSync(fd);
+  }
+};
 
 const text = (file: RepoFile): string =>
   file.kind === "file" && file.size <= MAX_READ ? readFileSync(file.abs, "utf8") : "";
@@ -89,7 +100,7 @@ const nativeBinary: Rule = {
   id: "native-binary",
   check: (file) => {
     if (file.kind !== "file") return [];
-    const head = file.size > 0 ? readFileSync(file.abs).subarray(0, 4).toString("hex") : "";
+    const head = file.size > 0 ? firstBytes(file.abs, 4) : "";
     return NATIVE_EXT.test(file.path) || MAGIC.some((m) => head.startsWith(m))
       ? finding("native-binary", "high", file, "committed native binary")
       : [];

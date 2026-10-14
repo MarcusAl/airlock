@@ -33,7 +33,7 @@ const envArgs = (env: Readonly<Record<string, string>>): string[] =>
 
 const mount = (spec: string): string[] => ["--mount", spec];
 
-const assertMountable = (path: string): string => {
+export const assertMountable = (path: string): string => {
   if (path.includes(",")) {
     throw new AirlockError(`path contains a comma, which docker --mount cannot take: ${path}`);
   }
@@ -156,4 +156,39 @@ export const execArgs = (request: ExecRequest): string[] => [
   "bash",
   "-c",
   request.command,
+];
+
+export const CLONE_IMAGE = "alpine/git:2.54.0";
+
+export const cloneArgs = (url: string, destination: string, localPath?: string): string[] => [
+  "run",
+  "--rm",
+  "--network",
+  "bridge",
+  ...HARDENING,
+  "--read-only",
+  "--tmpfs",
+  "/tmp",
+  "--pids-limit",
+  "256",
+  "--memory",
+  "1g",
+  "--user",
+  USER,
+  "-e",
+  "HOME=/tmp",
+  "--mount",
+  `type=bind,src=${assertMountable(destination)},dst=/out`,
+  ...(localPath
+    ? ["--mount", `type=bind,src=${assertMountable(localPath)},dst=/src,readonly`]
+    : []),
+  CLONE_IMAGE,
+  "-c",
+  "safe.directory=*",
+  "clone",
+  "--no-recurse-submodules",
+  "--template=",
+  "--",
+  url,
+  "/out",
 ];

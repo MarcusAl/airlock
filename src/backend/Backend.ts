@@ -37,7 +37,20 @@ export interface SandboxStatus {
   readonly running: boolean;
 }
 
-export interface Backend {
+export interface CloneSource {
+  readonly url: string;
+  readonly localPath?: string;
+}
+
+export interface Cloner {
+  clone(source: CloneSource, destination: string): Promise<void>;
+}
+
+export interface Freezer {
+  freeze<T>(name: string, work: () => Promise<T>): Promise<T>;
+}
+
+export interface Backend extends Freezer {
   up(spec: SandboxSpec): Promise<void>;
   resume(spec: SandboxSpec): Promise<boolean>;
   exec(request: ExecRequest): Promise<number>;
