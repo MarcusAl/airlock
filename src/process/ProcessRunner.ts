@@ -1,5 +1,11 @@
 import { spawn } from "node:child_process";
 import { quote } from "shell-quote";
+import { AirlockError } from "../errors.js";
+
+const missingProgram = (cmd: string) => (error: NodeJS.ErrnoException) =>
+  error.code === "ENOENT"
+    ? new AirlockError(`\`${cmd}\` isn't installed or isn't on your PATH`)
+    : error;
 
 export interface RunOptions {
   readonly cwd?: string;
@@ -33,7 +39,7 @@ export class ShellRunner implements ProcessRunner {
       child.stderr.on("data", (chunk) => {
         stderr += chunk;
       });
-      child.on("error", reject);
+      child.on("error", (error) => reject(missingProgram(cmd)(error)));
       child.on("close", (code) => resolve({ code: code ?? 1, stdout, stderr }));
       child.stdin.end(options.input ?? "");
     });
@@ -46,7 +52,7 @@ export class ShellRunner implements ProcessRunner {
         env: options.env ?? process.env,
         stdio: "inherit",
       });
-      child.on("error", reject);
+      child.on("error", (error) => reject(missingProgram(cmd)(error)));
       child.on("close", (code) => resolve(code ?? 1));
     });
   }

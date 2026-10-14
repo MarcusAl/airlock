@@ -107,7 +107,11 @@ export class Importer {
       url,
       "/out",
     ]);
-    if (result.code !== 0) throw new AirlockError(`clone failed: ${result.stderr.trim()}`);
+    if (result.code !== 0) {
+      throw new AirlockError(
+        `clone failed: ${result.stderr.trim()}\nPrivate repo? Clone it yourself, then run: airlock import <path>`,
+      );
+    }
   }
 
   private async copyPlainDirectory(local: string, paths: SandboxPaths): Promise<void> {

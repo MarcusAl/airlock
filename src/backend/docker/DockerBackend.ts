@@ -6,8 +6,10 @@ import { IMAGE_UID } from "../../presets/dockerfile.js";
 import type { ProcessRunner } from "../../process/ProcessRunner.js";
 import type { Backend, ExecRequest, SandboxSpec, SandboxStatus } from "../Backend.js";
 import { appRunArgs, execArgs, gatewayCreateArgs, serviceRunArgs } from "./args.js";
+import { explainDockerError } from "./explain.js";
 import { ImageBuilder } from "./ImageBuilder.js";
 import { names } from "./names.js";
+import { assertPortsFree } from "./ports.js";
 
 const hashOf = (value: unknown): string =>
   createHash("sha256").update(JSON.stringify(value)).digest("hex").slice(0, 12);
@@ -85,7 +87,8 @@ export class DockerBackend implements Backend {
   private async docker(args: readonly string[]): Promise<string> {
     const result = await this.runner.capture("docker", args);
     if (result.code !== 0) {
-      throw new AirlockError(`docker ${args[0]} failed: ${result.stderr.trim()}`);
+      const explanation = explainDockerError(result.stderr);
+      throw new AirlockError(explanation ?? `docker ${args[0]} failed: ${result.stderr.trim()}`);
     }
     return result.stdout;
   }
@@ -159,6 +162,7 @@ export class DockerBackend implements Backend {
     const squidConf = compileSquidConfig(spec.policy);
     const n = names(spec.name);
     await this.ensureContainer(n.gateway, hashOf([image, squidConf, spec.ports]), async (hash) => {
+      await assertPortsFree(spec.ports);
       await this.docker(
         gatewayCreateArgs({ sandbox: spec.name, image, squidConf, ports: spec.ports, hash }),
       );

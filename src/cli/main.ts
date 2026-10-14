@@ -39,6 +39,14 @@ const splitDryRun = (argv: readonly string[]): { dryRun: boolean; args: string[]
   };
 };
 
+const describe = (error: unknown): string => {
+  if (error instanceof AirlockError) return error.message;
+  if (process.env.AIRLOCK_DEBUG)
+    return error instanceof Error ? (error.stack ?? error.message) : String(error);
+  const message = error instanceof Error ? error.message : String(error);
+  return `unexpected error: ${message} (set AIRLOCK_DEBUG=1 for details)`;
+};
+
 const runCommand = async (command: Command, args: string[], dryRun: boolean): Promise<number> => {
   try {
     if (dryRun && !command.dryRunnable) {
@@ -46,8 +54,7 @@ const runCommand = async (command: Command, args: string[], dryRun: boolean): Pr
     }
     return await command.execute(args, createContext({ dryRun }));
   } catch (error) {
-    if (!(error instanceof AirlockError)) throw error;
-    process.stderr.write(`airlock: ${error.message}\n`);
+    process.stderr.write(`airlock: ${describe(error)}\n`);
     return 1;
   }
 };

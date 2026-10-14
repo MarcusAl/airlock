@@ -32,7 +32,13 @@ export class StateStore {
     if (!this.exists()) {
       throw new AirlockError(`no sandbox "${this.paths.name}"; run airlock import first`);
     }
-    return JSON.parse(readFileSync(this.paths.stateFile, "utf8"));
+    try {
+      return JSON.parse(readFileSync(this.paths.stateFile, "utf8"));
+    } catch {
+      throw new AirlockError(
+        `sandbox state is unreadable: ${this.paths.stateFile}; fix the JSON or remove ${this.paths.dir}`,
+      );
+    }
   }
 
   save(state: SandboxState): void {

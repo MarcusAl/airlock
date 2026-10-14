@@ -1,6 +1,7 @@
 import { fileURLToPath } from "node:url";
 import { AirlockError } from "../../errors.js";
 import type { ProcessRunner } from "../../process/ProcessRunner.js";
+import { explainDockerError } from "./explain.js";
 
 export type ImageSource = { readonly dockerfile: string } | { readonly context: URL };
 
@@ -31,6 +32,8 @@ export class ImageBuilder {
           ]);
     if (result.code !== 0) {
       const detail = result.stderr.trim().split("\n").slice(-5).join("\n");
+      const explanation = explainDockerError(result.stderr);
+      if (explanation) throw new AirlockError(explanation);
       throw new AirlockError(`image build failed for ${tag}${hint(result.stderr)}:\n${detail}`);
     }
   }
