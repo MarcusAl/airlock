@@ -1,6 +1,6 @@
 {
   "name": "@marcusal/airlock",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Run untrusted repos (take-homes, random GitHub projects) without letting them touch your machine.",
   "keywords": [
     "sandbox",
