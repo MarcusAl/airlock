@@ -2,9 +2,7 @@ import { mkdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } 
 import { join } from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
 import { AirlockError } from "../errors.js";
-
-const DELAY_MS = 100;
-const FRESH_MS = 2_000;
+import { LIMITS } from "../limits.js";
 
 const isAlive = (pid: number): boolean => {
   if (!Number.isInteger(pid) || pid <= 0) return false;
@@ -21,7 +19,7 @@ export class DirLock {
 
   constructor(
     private readonly path: string,
-    { maxWaitMs = 60_000 }: { maxWaitMs?: number } = {},
+    { maxWaitMs = LIMITS.lock.waitMs }: { maxWaitMs?: number } = {},
   ) {
     this.maxWaitMs = maxWaitMs;
   }
@@ -47,7 +45,7 @@ export class DirLock {
           "sandbox is busy: another airlock command is starting or checking it; try again shortly",
         );
       }
-      await sleep(DELAY_MS);
+      await sleep(LIMITS.lock.retryMs);
     }
   }
 
@@ -74,7 +72,7 @@ export class DirLock {
 
   private isStale(): boolean {
     const pid = this.holder();
-    return pid === undefined ? this.olderThan(FRESH_MS) : !isAlive(pid);
+    return pid === undefined ? this.olderThan(LIMITS.lock.freshMs) : !isAlive(pid);
   }
 
   private breakStale(): void {

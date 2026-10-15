@@ -4,6 +4,7 @@ import { dirname } from "node:path";
 import { DockerBackend } from "../backend/docker/DockerBackend.js";
 import { SandboxPaths } from "../core/SandboxPaths.js";
 import { Tripwire } from "../core/Tripwire.js";
+import { LIMITS } from "../limits.js";
 import { ShellRunner } from "../process/ProcessRunner.js";
 import { airlockCommand } from "./airlockCommand.js";
 import { decide } from "./decide.js";
@@ -23,8 +24,8 @@ const denyAll = (message: string) => ({
 const output = await (async () => {
   try {
     const tripwire = new Tripwire({
-      backend: new DockerBackend(new ShellRunner()),
-      lockWaitMs: 5_000,
+      backend: new DockerBackend(new ShellRunner(), { quickMs: LIMITS.hook.dockerMs }),
+      lockWaitMs: LIMITS.hook.lockWaitMs,
     });
     const planted = await tripwire.run(SandboxPaths.for(sandbox, root));
     const result = decide(readFileSync(0, "utf8"), { sandbox, workspace, airlock });

@@ -1,4 +1,5 @@
 import { AirlockError } from "../errors.js";
+import { LIMITS } from "../limits.js";
 import { type ProcessRunner, ShellRunner } from "./ProcessRunner.js";
 
 export const SAFE_GIT_FLAGS = [
@@ -14,8 +15,6 @@ export const SAFE_GIT_FLAGS = [
   "submodule.recurse=false",
 ];
 
-const GIT_TIMEOUT_MS = 60_000;
-
 export class Git {
   constructor(
     private readonly cwd: string,
@@ -24,7 +23,7 @@ export class Git {
 
   async run(args: readonly string[]): Promise<string> {
     const result = await this.runner.capture("git", [...SAFE_GIT_FLAGS, ...args], {
-      timeoutMs: GIT_TIMEOUT_MS,
+      timeoutMs: LIMITS.git.ms,
       cwd: this.cwd,
       env: { ...process.env, GIT_LITERAL_PATHSPECS: "1", GIT_TERMINAL_PROMPT: "0" },
     });
