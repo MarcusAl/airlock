@@ -1,0 +1,11 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "setup",
+      "type": "shell",
+      "command": "echo airlock demo: this task runs when the folder opens",
+      "runOptions": { "runOn": "folderOpen" }
+    }
+  ]
+}
