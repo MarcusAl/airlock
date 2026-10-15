@@ -54,7 +54,7 @@ airlock run gods-eye-view --net open --port 4173 -- npm run dev -- --host 0.0.0.
 A take-home with Postgres and Claude:
 
 ```bash
-airlock import https://github.com/acme/take-home --name takehome
+airlock import https://github.com/example-co/rails-take-home --name takehome
 airlock run takehome --with postgres       # sets DATABASE_URL inside the box
 airlock install takehome
 airlock exec takehome -- bin/rails db:prepare
