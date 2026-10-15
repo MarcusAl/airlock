@@ -1,6 +1,7 @@
 import { spawn } from "node:child_process";
 import { quote } from "shell-quote";
 import { AirlockError } from "../errors.js";
+import { LIMITS } from "../limits.js";
 
 const missingProgram = (cmd: string) => (error: NodeJS.ErrnoException) =>
   error.code === "ENOENT"
@@ -25,7 +26,6 @@ export interface ProcessRunner {
   interactive(cmd: string, args: readonly string[], options?: RunOptions): Promise<number>;
 }
 
-const KILL_AFTER_MS = 10_000;
 const TIMED_OUT = 124;
 
 export const timedOut = (result: CaptureResult): boolean =>
@@ -80,7 +80,7 @@ export class ShellRunner implements ProcessRunner {
     });
     const forward = (signal: NodeJS.Signals) => {
       child.kill(signal);
-      setTimeout(() => child.kill("SIGKILL"), KILL_AFTER_MS).unref();
+      setTimeout(() => child.kill("SIGKILL"), LIMITS.process.killAfterMs).unref();
     };
     const ignore = () => {};
     process.on("SIGINT", ignore);

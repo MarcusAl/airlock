@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { setTimeout as sleep } from "node:timers/promises";
 import { AirlockError } from "../../errors.js";
+import { LIMITS } from "../../limits.js";
 import { compileSquidConfig, GATEWAY_ASSETS } from "../../net/squid.js";
 import type { SandboxSpec } from "../Backend.js";
 import { gatewayCreateArgs } from "./args.js";
@@ -10,9 +11,6 @@ import type { ImageBuilder } from "./ImageBuilder.js";
 import { names } from "./names.js";
 import type { PortGuard } from "./ports.js";
 import type { Reconciler } from "./Reconciler.js";
-
-const HEALTH_CHECKS = 5;
-const HEALTH_INTERVAL_MS = 200;
 
 export const hashOf = (value: unknown): string =>
   createHash("sha256").update(JSON.stringify(value)).digest("hex").slice(0, 12);
@@ -67,14 +65,14 @@ export class Gateway {
   }
 
   private async assertStaysUp(container: string): Promise<void> {
-    for (let check = 0; check < HEALTH_CHECKS; check++) {
+    for (let check = 0; check < LIMITS.gateway.healthChecks; check++) {
       const [running] = (await this.deps.docker.inspect("{{.State.Running}}", container)) ?? [];
       if (running !== "true") {
         const logs = await this.deps.docker.attempt(["logs", "--tail", "5", container]);
         const tail = `${logs.stdout}${logs.stderr}`.trim();
         throw new AirlockError(`the network gateway stopped right after starting:\n${tail}`);
       }
-      await sleep(HEALTH_INTERVAL_MS);
+      await sleep(LIMITS.gateway.healthIntervalMs);
     }
   }
 }

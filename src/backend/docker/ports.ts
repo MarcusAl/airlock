@@ -1,6 +1,7 @@
 import { createServer } from "node:net";
 import { setTimeout as sleep } from "node:timers/promises";
 import { AirlockError } from "../../errors.js";
+import { LIMITS } from "../../limits.js";
 
 const isFree = (port: number): Promise<boolean> =>
   new Promise((resolve) => {
@@ -13,7 +14,10 @@ export class PortGuard {
   private readonly attempts: number;
   private readonly delayMs: number;
 
-  constructor({ attempts = 20, delayMs = 150 }: { attempts?: number; delayMs?: number } = {}) {
+  constructor({
+    attempts = LIMITS.ports.attempts,
+    delayMs = LIMITS.ports.retryMs,
+  }: { attempts?: number; delayMs?: number } = {}) {
     this.attempts = attempts;
     this.delayMs = delayMs;
   }

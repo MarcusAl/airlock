@@ -4,11 +4,11 @@ import { quote } from "shell-quote";
 import type { Sandbox } from "../core/Sandbox.js";
 import type { SandboxLauncher } from "../core/SandboxLauncher.js";
 import type { SandboxPaths } from "../core/SandboxPaths.js";
+import { LIMITS } from "../limits.js";
 import type { ProcessRunner } from "../process/ProcessRunner.js";
 import { GIT_RULES } from "./route.js";
 
 const MATCHER = "*";
-const HOOK_TIMEOUT_SECONDS = 120;
 
 const SECRET_PATHS = [
   "~/.ssh/**",
@@ -73,7 +73,11 @@ export class ClaudeLauncher {
           {
             matcher: MATCHER,
             hooks: [
-              { type: "command", command: this.hookCommand(paths), timeout: HOOK_TIMEOUT_SECONDS },
+              {
+                type: "command",
+                command: this.hookCommand(paths),
+                timeout: LIMITS.hook.timeoutSeconds,
+              },
             ],
           },
         ],

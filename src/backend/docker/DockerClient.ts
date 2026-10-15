@@ -1,9 +1,8 @@
 import { AirlockError } from "../../errors.js";
+import { LIMITS } from "../../limits.js";
 import { type CaptureResult, type ProcessRunner, timedOut } from "../../process/ProcessRunner.js";
 import { explainDockerError } from "./explain.js";
 
-const QUICK_MS = 60_000;
-const SLOW_MS = 15 * 60_000;
 const SLOW_COMMANDS = new Set(["build", "run", "create", "pull", "stop"]);
 
 const lines = (out: string): string[] =>
@@ -12,8 +11,10 @@ const lines = (out: string): string[] =>
     .map((line) => line.trim())
     .filter(Boolean);
 
-export const timeoutFor = (args: readonly string[]): number =>
-  SLOW_COMMANDS.has(args[0] ?? "") ? SLOW_MS : QUICK_MS;
+export const timeoutFor = (
+  args: readonly string[],
+  quickMs: number = LIMITS.docker.quickMs,
+): number => (SLOW_COMMANDS.has(args[0] ?? "") ? LIMITS.docker.slowMs : quickMs);
 
 export const failure = (args: readonly string[], result: CaptureResult): AirlockError => {
   if (timedOut(result)) {
@@ -26,7 +27,14 @@ export const failure = (args: readonly string[], result: CaptureResult): Airlock
 };
 
 export class DockerClient {
-  constructor(private readonly runner: ProcessRunner) {}
+  private readonly quickMs: number;
+
+  constructor(
+    private readonly runner: ProcessRunner,
+    { quickMs = LIMITS.docker.quickMs }: { quickMs?: number } = {},
+  ) {
+    this.quickMs = quickMs;
+  }
 
   async run(args: readonly string[]): Promise<string> {
     const result = await this.attempt(args);
@@ -35,7 +43,7 @@ export class DockerClient {
   }
 
   attempt(args: readonly string[]): Promise<CaptureResult> {
-    return this.runner.capture("docker", args, { timeoutMs: timeoutFor(args) });
+    return this.runner.capture("docker", args, { timeoutMs: timeoutFor(args, this.quickMs) });
   }
 
   async lines(args: readonly string[]): Promise<string[]> {

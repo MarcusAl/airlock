@@ -1,6 +1,7 @@
 import { join } from "node:path";
 import type { Freezer } from "../backend/Backend.js";
 import { type NeutraliseResult, Neutraliser } from "../importer/Neutraliser.js";
+import { LIMITS } from "../limits.js";
 import type { WalkOptions } from "../scan/walk.js";
 import { DirLock } from "./DirLock.js";
 import type { Reporter } from "./Reporter.js";
@@ -11,7 +12,10 @@ interface Cleaner {
   run(paths: SandboxPaths, bucket: string, limits?: WalkOptions): Promise<NeutraliseResult>;
 }
 
-export const TRIPWIRE_LIMITS: WalkOptions = { maxEntries: 200_000, deadlineMs: 15_000 };
+export const TRIPWIRE_LIMITS: WalkOptions = {
+  maxEntries: LIMITS.tripwire.maxEntries,
+  deadlineMs: LIMITS.tripwire.deadlineMs,
+};
 
 export const sweepLock = (paths: SandboxPaths, maxWaitMs?: number): DirLock =>
   new DirLock(join(paths.dir, ".sweep.lock"), { maxWaitMs });
@@ -31,7 +35,7 @@ export class Tripwire {
     this.backend = deps.backend;
     this.neutraliser = deps.neutraliser ?? new Neutraliser();
     this.limits = deps.limits ?? TRIPWIRE_LIMITS;
-    this.lockWaitMs = deps.lockWaitMs ?? 30_000;
+    this.lockWaitMs = deps.lockWaitMs ?? LIMITS.tripwire.lockWaitMs;
   }
 
   async run(paths: SandboxPaths): Promise<string[]> {

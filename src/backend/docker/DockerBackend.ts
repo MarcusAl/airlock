@@ -16,6 +16,7 @@ export interface BackendOptions {
   readonly images?: ImageBuilder;
   readonly ports?: PortGuard;
   readonly onBuild?: (tag: string) => void;
+  readonly quickMs?: number;
 }
 
 export class DockerBackend implements Backend {
@@ -27,7 +28,7 @@ export class DockerBackend implements Backend {
   private readonly images: ImageBuilder;
 
   constructor(runner: ProcessRunner, options: BackendOptions = {}) {
-    this.docker = new DockerClient(runner);
+    this.docker = new DockerClient(runner, { quickMs: options.quickMs });
     this.images = options.images ?? new ImageBuilder(runner, options.onBuild);
     this.reconciler = new Reconciler(this.docker);
     this.gateway = new Gateway({
