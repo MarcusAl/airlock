@@ -4,6 +4,10 @@ Run code you don't trust yet without letting it touch your machine.
 
 Fake take-home assignments are a known malware route: a `postinstall` script or an editor task can steal your SSH keys and cloud credentials. A popular GitHub project runs thousands of strangers' install scripts with your permissions too. airlock runs that code in a locked-down container behind a network gateway, while your editor and Claude Code work on the files from outside.
 
+![airlock imports a fake take-home, quarantines its editor and agent config, blocks its network access and removes the editor task it plants](docs/demo.gif)
+
+The repo in the demo is [`examples/suspicious-take-home`](examples/suspicious-take-home): the usual tricks with harmless payloads. Clone this repo and run `airlock import examples/suspicious-take-home` to try it.
+
 ## How it keeps you safe
 
 To the code, the container is the whole machine: a non-root user with no capabilities, a read-only root filesystem and CPU, memory and process limits, on an internal Docker network with no route out. Your home folder and credentials stay outside, and no environment variable goes in unless you forward it with `--env`.
@@ -19,6 +23,12 @@ The box has two openings, both deliberate:
 Your agent stays outside. `airlock claude <name>` starts your normal Claude Code with your usual sign-in, and a hook rewrites every Bash command into `airlock exec`. File tools can't leave the workspace or write into `.git`. Web and MCP tools ask first, MCP servers stay off without `--allow-mcp`, and unknown tools are denied. Commands routed into the box run without prompting you; anything that would run on your machine still asks. Only plain `git add`, `git commit -m` and `git restore` run on your machine, with hooks, fsmonitor, pager and editor forced off.
 
 airlock never builds the repository's own Dockerfile.
+
+## Why not plain Docker or a dev container?
+
+- **`docker run -v "$PWD:/app"`** hands the code your folder and checks nothing it leaves behind, and its network is open. airlock scans on import, quarantines editor and agent config, re-checks after every command and starts with no network.
+- **Dev Containers** build the repository's own `devcontainer.json` and Dockerfile, and forward your SSH agent and git credentials into the box. airlock never builds the repository's Dockerfile and forwards nothing unless you pass `--env`.
+- **Your agent stays on your machine** with its normal sign-in, and its commands run in the box.
 
 ## Install
 

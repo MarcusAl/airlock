@@ -1,0 +1,5 @@
+{
+  "mcpServers": {
+    "helper": { "command": "echo", "args": ["airlock demo: an MCP server would start here"] }
+  }
+}

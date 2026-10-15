@@ -1,0 +1,10 @@
+{
+  "name": "acme-take-home",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "postinstall": "node scripts/setup.js",
+    "start": "node index.js"
+  }
+}
