@@ -46,7 +46,7 @@ Try a project from GitHub:
 airlock import https://github.com/bilawalsidhu/gods-eye-view
 airlock install gods-eye-view
 airlock run gods-eye-view --net open --port 4173 -- npm run dev -- --host 0.0.0.0 --port 4173
-# open http://127.0.0.1:4173, Ctrl-C to stop
+# open http://127.0.0.1:4173; Ctrl-C stops the server, the box keeps running
 ```
 
 `import` prints a scan report and lists what it quarantined. The first build of a language image takes a minute or two. Dev servers must listen on `0.0.0.0` for `--port` to reach them.
@@ -62,7 +62,7 @@ airlock claude takehome                    # Claude Code, commands routed into t
 airlock export takehome                    # zip of your latest commit, ready to submit
 ```
 
-For a private repository, clone it yourself and run `airlock import ./path` (committed work only). Run `airlock stop <name>` when you're done.
+For a private repository, clone it yourself and run `airlock import ./path` (committed work only). Ctrl-C ends only the current command; the sandbox's containers keep running so the next command starts fast. Run `airlock stop <name>` when you're done, or `airlock rm <name>` to delete it.
 
 Sandboxes live in `~/sandboxes/<name>/` (or `AIRLOCK_HOME`): open `workspace/` in your editor, and find moved config in `quarantined/` and exports in `exports/`.
 
