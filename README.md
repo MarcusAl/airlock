@@ -4,7 +4,9 @@ Run code you don't trust yet without letting it touch your machine.
 
 Fake take-home assignments are a known malware route: a `postinstall` script or an editor task can steal your SSH keys and cloud credentials. A popular GitHub project runs thousands of strangers' install scripts with your permissions too. airlock runs that code in a locked-down container behind a network gateway, while your editor and Claude Code work on the files from outside.
 
-![airlock imports a fake take-home, quarantines its editor and agent config, blocks its network access and removes the editor task it plants](docs/demo.gif)
+[![airlock imports a fake take-home, quarantines its editor and agent config, runs its code with no access to your files or the network, and lets Claude Code run it inside the box](docs/airlock.gif)](docs/airlock.mp4)
+
+<sub>Click for the full video with sound.</sub>
 
 The repo in the demo is [`examples/suspicious-take-home`](examples/suspicious-take-home): the usual tricks with harmless payloads. Clone this repo and run `airlock import examples/suspicious-take-home` to try it.
 
